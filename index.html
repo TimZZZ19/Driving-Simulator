@@ -39,10 +39,35 @@
   /* ── Game Wrapper ── */
   #gameWrapper {
     position: relative; display: none;
-    border-radius: 10px; overflow: hidden;
+    border-radius: 10px 10px 0 0; overflow: hidden;
     box-shadow: 0 4px 28px rgba(0,0,0,0.5);
   }
   canvas { display: block; }
+
+  /* ── Chart Container ── */
+  #chartContainer {
+    display: none; position: relative;
+    width: 960px;
+    background: #fdfdfd; border-radius: 0 0 10px 10px;
+    box-shadow: 0 4px 28px rgba(0,0,0,0.5);
+    padding-bottom: 6px;
+  }
+  #chartCanvas { display: block; margin: 0 auto; cursor: crosshair; }
+  .chartLegend {
+    display: flex; justify-content: center; gap: 24px;
+    padding: 4px 0 6px; font-size: 0.72rem; color: #999;
+  }
+  .chartLegend span { display: flex; align-items: center; gap: 5px; }
+  .swatch { display: inline-block; width: 14px; height: 10px; border-radius: 2px; }
+  .swatch.area  { background: rgba(66,133,244,0.22); border: 1px solid rgba(66,133,244,0.5); }
+  .swatch.slope { background: transparent; border-bottom: 2px dashed #e63946; width: 20px; height: 0; }
+  #chartTooltip {
+    position: fixed; display: none; pointer-events: none;
+    background: rgba(0,0,0,0.78); color: #fff; padding: 5px 10px;
+    border-radius: 6px; font-size: 0.8rem; white-space: nowrap;
+    font-family: 'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+    z-index: 100;
+  }
 
   /* ── Bottom Bar ── */
   #bottomBar { display: none; align-items: center; gap: 28px; margin-top: 14px; }
@@ -52,12 +77,6 @@
   }
   .keyHint.brake  { border-bottom: 3px solid #e63946; }
   .keyHint.accel  { border-bottom: 3px solid #22c55e; }
-  #chartBtn {
-    padding: 7px 20px; border: 1px solid #555; border-radius: 6px;
-    background: transparent; color: #aaa; cursor: pointer; font-size: 0.85rem;
-    transition: all 0.2s;
-  }
-  #chartBtn:hover { background: #2a2a3e; color: #fff; }
   #statusText { font-size: 0.8rem; color: #666; }
   #pauseBtn, #stopBtn {
     padding: 7px 18px; border: 1px solid #555; border-radius: 6px;
@@ -91,11 +110,20 @@
   <canvas id="gameCanvas"></canvas>
 </div>
 
+<!-- ═══════════════ V-T GRAPH ═══════════════ -->
+<div id="chartContainer">
+  <canvas id="chartCanvas"></canvas>
+  <div class="chartLegend">
+    <span><span class="swatch area"></span> Area under curve = Displacement (net)</span>
+    <span><span class="swatch slope"></span> Dashed red = Slope (acceleration)</span>
+  </div>
+</div>
+<div id="chartTooltip"></div>
+
 <div id="bottomBar">
   <span>Controls: <span class="keyHint brake">J</span> Brake &nbsp; <span class="keyHint accel">K</span> Accelerator</span>
   <button id="pauseBtn">⏸ Pause</button>
   <button id="stopBtn">⏹ Stop</button>
-  <button id="chartBtn">📈 Open v-t Graph</button>
   <span id="statusText"></span>
 </div>
 
@@ -106,19 +134,27 @@
 // ──────────────────────────────────────────────
 const W = 960, H = 440;
 const CAR_X = 200;
-const ROAD_Y = 320;          // road surface Y in canvas
-const PX_PER_M = 120;        // pixels scrolled per metre travelled
+const ROAD_Y = 320;
+const PX_PER_M = 120;
 
+// game canvas
 const canvas = document.getElementById('gameCanvas');
 canvas.width  = W;
 canvas.height = H;
 const ctx = canvas.getContext('2d');
 
+// chart canvas
+const chartCanvas = document.getElementById('chartCanvas');
+chartCanvas.width  = 960;
+chartCanvas.height = 340;
+const cCtx = chartCanvas.getContext('2d');
+const CW = chartCanvas.width, CH = chartCanvas.height;
+
 const $config   = document.getElementById('configPanel');
 const $wrapper  = document.getElementById('gameWrapper');
+const $chart    = document.getElementById('chartContainer');
 const $bottom   = document.getElementById('bottomBar');
 const $status   = document.getElementById('statusText');
-const $chartBtn = document.getElementById('chartBtn');
 const $pauseBtn = document.getElementById('pauseBtn');
 const $stopBtn  = document.getElementById('stopBtn');
 const $accelIn  = document.getElementById('accelInput');
@@ -127,12 +163,12 @@ const $brakeIn  = document.getElementById('brakeInput');
 // ──────────────────────────────────────────────
 //  2. STATE
 // ──────────────────────────────────────────────
-let cfgAccel = 2;            // m/s²  (positive when K pressed)
-let cfgBrake = 3;            // m/s²  (magnitude; negative when J pressed)
+let cfgAccel = 2;
+let cfgBrake = 3;
 let running  = false;
 let paused   = false;
 
-// physics — v, s, a can all be negative now
+// physics
 let t = 0, v = 0, s = 0, a = 0;
 let lastTime = 0;
 
@@ -142,13 +178,9 @@ const keys = {};
 // scrolling background
 let bgOffset = 0;
 
-// v‑t data for the chart window — sampled at ~10 Hz
+// v‑t data — sampled at ~10 Hz
 let vtData = [];
 let lastSample = 0;
-
-// chart window
-let chartWindow = null;
-let chartReady  = false;
 
 // ──────────────────────────────────────────────
 //  3. SCENERY (pre‑generated)
@@ -164,16 +196,16 @@ let mountains = [], trees = [], buildings = [];
 })();
 
 // ──────────────────────────────────────────────
-//  4. DRAWING HELPERS
+//  4. GAME DRAWING HELPERS
 // ──────────────────────────────────────────────
-function rrect(x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + w - r, y); ctx.arcTo(x + w, y, x + w, y + r, r);
-  ctx.lineTo(x + w, y + h - r); ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
-  ctx.lineTo(x + r, y + h); ctx.arcTo(x, y + h, x, y + h - r, r);
-  ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
-  ctx.closePath();
+function rrect(context, x, y, w, h, r) {
+  context.beginPath();
+  context.moveTo(x + r, y);
+  context.lineTo(x + w - r, y); context.arcTo(x + w, y, x + w, y + r, r);
+  context.lineTo(x + w, y + h - r); context.arcTo(x + w, y + h, x + w - r, y + h, r);
+  context.lineTo(x + r, y + h); context.arcTo(x, y + h, x, y + h - r, r);
+  context.lineTo(x, y + r); context.arcTo(x, y, x + r, y, r);
+  context.closePath();
 }
 
 function drawSky() {
@@ -188,7 +220,6 @@ function scrollX(baseX, offset, rate, wrap) {
 }
 
 function drawScenery(offset) {
-  // mountains — slowest parallax
   ctx.fillStyle = '#5b8c5a';
   mountains.forEach(m => {
     const x = scrollX(m.x, offset, 0.6, 3600);
@@ -197,7 +228,6 @@ function drawScenery(offset) {
     ctx.moveTo(x, ROAD_Y); ctx.lineTo(x + m.w / 2, ROAD_Y - m.h); ctx.lineTo(x + m.w, ROAD_Y);
     ctx.closePath(); ctx.fill();
   });
-  // trees — medium parallax
   trees.forEach(t => {
     const x = scrollX(t.x, offset, 0.95, 5400);
     if (x < -80 || x > W + 80) return;
@@ -206,7 +236,6 @@ function drawScenery(offset) {
     ctx.fillStyle = '#3a7d3a';
     ctx.beginPath(); ctx.arc(x + 0.5, ROAD_Y - t.h * 0.7, t.h * 0.33, 0, Math.PI * 2); ctx.fill();
   });
-  // buildings — slowest
   buildings.forEach(b => {
     const x = scrollX(b.x, offset, 0.5, 6000);
     if (x < -100 || x > W + 100) return;
@@ -234,7 +263,6 @@ function drawCar(displacement) {
   const wR = 14, wb = 70;
   const angle = displacement / (wR / 100);
 
-  // flip car horizontally when moving backwards
   if (v < 0) {
     ctx.save();
     ctx.translate(cx, 0);
@@ -242,11 +270,9 @@ function drawCar(displacement) {
     ctx.translate(-cx, 0);
   }
 
-  // shadow
   ctx.fillStyle = 'rgba(0,0,0,0.18)';
   ctx.beginPath(); ctx.ellipse(cx + 2, cy + wR + 4, 56, 8, 0, 0, Math.PI * 2); ctx.fill();
 
-  // wheels
   [cx - wb / 2, cx + wb / 2].forEach(wx => {
     ctx.save();
     ctx.translate(wx, cy + wR);
@@ -262,7 +288,6 @@ function drawCar(displacement) {
     ctx.restore();
   });
 
-  // body
   const bx = cx - 58, by = cy - 18, bw = 116, bh = 26;
   ctx.fillStyle = '#d4343e';
   ctx.beginPath();
@@ -274,7 +299,6 @@ function drawCar(displacement) {
   ctx.closePath(); ctx.fill();
   ctx.strokeStyle = '#a02030'; ctx.lineWidth = 2; ctx.stroke();
 
-  // cabin
   ctx.fillStyle = '#c0303a';
   ctx.beginPath();
   ctx.moveTo(bx + 30, by); ctx.lineTo(bx + 26, by - 16);
@@ -284,7 +308,6 @@ function drawCar(displacement) {
   ctx.lineTo(bx + 88, by);
   ctx.closePath(); ctx.fill(); ctx.stroke();
 
-  // windows
   ctx.fillStyle = '#a8d8ea';
   [{ x: 38, w: 18 }, { x: 64, w: 22 }].forEach(w => {
     ctx.beginPath();
@@ -293,7 +316,6 @@ function drawCar(displacement) {
     ctx.closePath(); ctx.fill();
     ctx.strokeStyle = '#a02030'; ctx.lineWidth = 1; ctx.stroke();
   });
-  // lights
   ctx.fillStyle = '#ffe066'; ctx.beginPath(); ctx.arc(bx + bw - 6, by + bh * 0.5, 5, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = '#ff3333'; ctx.fillRect(bx - 2, by + bh * 0.3, 5, 8);
 
@@ -302,7 +324,7 @@ function drawCar(displacement) {
 
 function drawHUD() {
   const hx = W - 210, hy = 16;
-  ctx.fillStyle = 'rgba(0,0,0,0.65)'; rrect(hx, hy, 194, 124, 10); ctx.fill();
+  ctx.fillStyle = 'rgba(0,0,0,0.65)'; rrect(ctx, hx, hy, 194, 124, 10); ctx.fill();
   ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth = 1; ctx.stroke();
 
   const rows = [
@@ -325,15 +347,13 @@ function drawHUD() {
 
 function drawPedals() {
   const px = 20, py = H - 80;
-  ctx.fillStyle = 'rgba(0,0,0,0.5)'; rrect(px, py, 56, 68, 8); ctx.fill();
-  // J – brake/reverse
+  ctx.fillStyle = 'rgba(0,0,0,0.5)'; rrect(ctx, px, py, 56, 68, 8); ctx.fill();
   ctx.fillStyle = keys['j'] ? '#e63946' : '#444';
   ctx.fillRect(px + 8,  py + 10, 16, 22);
   ctx.fillStyle = '#ccc'; ctx.font = 'bold 10px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
   ctx.textAlign = 'center'; ctx.fillText('J', px + 16, py + 26);
   ctx.fillStyle = '#999'; ctx.font = '8px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
   ctx.fillText('Brake', px + 16, py + 40);
-  // K – accelerator
   ctx.fillStyle = keys['k'] ? '#22c55e' : '#444';
   ctx.fillRect(px + 30, py + 10, 16, 22);
   ctx.fillStyle = '#ccc'; ctx.font = 'bold 10px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
@@ -343,9 +363,9 @@ function drawPedals() {
 }
 
 // ──────────────────────────────────────────────
-//  5. RENDER FRAME
+//  5. GAME RENDER FRAME
 // ──────────────────────────────────────────────
-function render() {
+function renderGame() {
   ctx.clearRect(0, 0, W, H);
   drawSky();
   drawScenery(bgOffset);
@@ -356,59 +376,213 @@ function render() {
 }
 
 // ──────────────────────────────────────────────
-//  6. PHYSICS (frame‑rate independent)
+//  6. PHYSICS
 // ──────────────────────────────────────────────
 function updatePhysics(dt) {
-  // determine instantaneous acceleration
-  // J = negative acceleration (brake/reverse), K = positive (forward)
   if (keys['k'])      a =  cfgAccel;
   else if (keys['j']) a = -cfgBrake;
   else                a =  0;
 
   v += a * dt;
-
   s += v * dt;
   t += dt;
   bgOffset += v * PX_PER_M * dt;
 }
 
 // ──────────────────────────────────────────────
-//  7. CHART WINDOW MANAGEMENT
+//  7. V‑T GRAPH DRAWING
 // ──────────────────────────────────────────────
-function openChartWindow() {
-  if (chartWindow && !chartWindow.closed) {
-    chartWindow.focus();
-    return;
-  }
-  // Resolve path to chart.html (same directory as index.html)
-  const base = location.href.replace(/[^/]*$/, '');
-  chartWindow = window.open(base + 'chart.html', 'vtChart', 'width=600,height=500');
-  if (!chartWindow) {
-    $status.textContent = 'Popup blocked. Please allow popups for this page.';
-    return;
-  }
-  chartReady = false;
-  $status.textContent = 'v-t Graph window opened';
+const CPAD = { top: 22, right: 40, bottom: 40, left: 54 };
+const CPW = CW - CPAD.left - CPAD.right;
+const CPH = CH - CPAD.top - CPAD.bottom;
 
-  // Listen for 'ready' signal from chart window
-  window.addEventListener('message', function onReady(e) {
-    if (e.data && e.data.type === 'chartReady') {
-      chartReady = true;
-      // send full history immediately
-      sendToChart();
+function ctx_t(tVal, tMin, tMax) {
+  return CPAD.left + (tVal - tMin) / (tMax - tMin) * CPW;
+}
+function ctx_v(vVal, vMin, vMax) {
+  return CPAD.top + CPH - (vVal - vMin) / (vMax - vMin) * CPH;
+}
+
+function niceStep(range, targetTicks) {
+  const raw = range / targetTicks;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const residual = raw / mag;
+  return (residual <= 1.5 ? 1 : residual <= 3 ? 2 : residual <= 7 ? 5 : 10) * mag;
+}
+
+function computeArea() {
+  let area = 0;
+  for (let i = 1; i < vtData.length; i++)
+    area += (vtData[i - 1].v + vtData[i].v) / 2 * (vtData[i].t - vtData[i - 1].t);
+  return area;
+}
+
+function drawChart() {
+  cCtx.clearRect(0, 0, CW, CH);
+
+  // auto-scale
+  let tMin = 0, tMax = 10, vMin = -5, vMax = 5;
+  if (vtData.length > 0) {
+    tMax = Math.max(vtData[vtData.length - 1].t + 1, 8);
+    const allV = vtData.map(d => d.v);
+    vMax = Math.max(2, ...allV) * 1.2;
+    vMin = Math.min(-2, ...allV) * 1.2;
+    if (vMin > 0) vMin = 0;
+    if (vMax < 0) vMax = 0;
+  }
+  const vRange = vMax - vMin;
+
+  // grid
+  const tNice = niceStep(tMax - tMin, 5);
+  const vNice = niceStep(vRange, 5);
+  cCtx.strokeStyle = '#ececec'; cCtx.lineWidth = 0.5;
+  for (let ti = 0; ti <= tMax + tNice; ti += tNice) {
+    cCtx.beginPath(); cCtx.moveTo(ctx_t(ti, tMin, tMax), CPAD.top);
+    cCtx.lineTo(ctx_t(ti, tMin, tMax), CPAD.top + CPH); cCtx.stroke();
+  }
+  for (let vi = vMin - (vMin % vNice || 0); vi <= vMax + vNice; vi += vNice) {
+    cCtx.beginPath(); cCtx.moveTo(CPAD.left, ctx_v(vi, vMin, vMax));
+    cCtx.lineTo(CPAD.left + CPW, ctx_v(vi, vMin, vMax)); cCtx.stroke();
+  }
+
+  // axes — t-axis at v=0
+  const yZero = ctx_v(0, vMin, vMax);
+  const axisY = Math.max(CPAD.top, Math.min(CPAD.top + CPH, yZero));
+  cCtx.strokeStyle = '#333'; cCtx.lineWidth = 1.5;
+  cCtx.beginPath(); cCtx.moveTo(CPAD.left, CPAD.top); cCtx.lineTo(CPAD.left, CPAD.top + CPH); cCtx.stroke();
+  cCtx.beginPath(); cCtx.moveTo(CPAD.left, axisY); cCtx.lineTo(CPAD.left + CPW, axisY); cCtx.stroke();
+  // arrowheads
+  cCtx.fillStyle = '#333';
+  cCtx.beginPath(); cCtx.moveTo(CPAD.left, CPAD.top - 6); cCtx.lineTo(CPAD.left - 4, CPAD.top + 2); cCtx.lineTo(CPAD.left + 4, CPAD.top + 2); cCtx.fill();
+  cCtx.beginPath(); cCtx.moveTo(CPAD.left + CPW + 6, axisY); cCtx.lineTo(CPAD.left + CPW - 2, axisY - 4); cCtx.lineTo(CPAD.left + CPW - 2, axisY + 4); cCtx.fill();
+
+  // tick labels
+  cCtx.fillStyle = '#666'; cCtx.font = '10px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+  cCtx.textAlign = 'center';
+  for (let ti = 0; ti <= tMax + tNice; ti += tNice)
+    if (ti >= tMin) cCtx.fillText(ti, ctx_t(ti, tMin, tMax), axisY + 14);
+  cCtx.textAlign = 'right';
+  for (let vi = vMin - (vMin % vNice || 0); vi <= vMax + vNice; vi += vNice) {
+    if (Math.abs(vi) < vNice * 0.01) continue;
+    cCtx.fillText(vi % 1 === 0 ? vi : vi.toFixed(1), CPAD.left - 6, ctx_v(vi, vMin, vMax) + 4);
+  }
+  if (vMin <= 0 && vMax >= 0) cCtx.fillText('0', CPAD.left - 6, yZero + 4);
+
+  // axis titles
+  cCtx.fillStyle = '#333'; cCtx.font = '11px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+  cCtx.textAlign = 'center'; cCtx.fillText('t / s', CW / 2, CH - 4);
+  cCtx.save();
+  cCtx.translate(12, CPAD.top + CPH / 2); cCtx.rotate(-Math.PI / 2);
+  cCtx.textAlign = 'center'; cCtx.fillText('v / (m·s⁻¹)', 0, 0);
+  cCtx.restore();
+
+  if (vtData.length < 2) {
+    cCtx.fillStyle = '#999'; cCtx.font = '15px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+    cCtx.textAlign = 'center'; cCtx.fillText('Waiting for data…', CW / 2, CPAD.top + CPH / 2);
+    return;
+  }
+
+  // area fill between curve and t-axis
+  cCtx.beginPath();
+  cCtx.moveTo(ctx_t(vtData[0].t, tMin, tMax), yZero);
+  for (let i = 0; i < vtData.length; i++)
+    cCtx.lineTo(ctx_t(vtData[i].t, tMin, tMax), ctx_v(vtData[i].v, vMin, vMax));
+  cCtx.lineTo(ctx_t(vtData[vtData.length - 1].t, tMin, tMax), yZero);
+  cCtx.closePath();
+  cCtx.fillStyle = 'rgba(66, 133, 244, 0.18)';
+  cCtx.fill();
+
+  // v‑t curve
+  cCtx.strokeStyle = '#1a56db'; cCtx.lineWidth = 2.5; cCtx.lineJoin = 'round';
+  cCtx.beginPath();
+  for (let i = 0; i < vtData.length; i++) {
+    const x = ctx_t(vtData[i].t, tMin, tMax), y = ctx_v(vtData[i].v, vMin, vMax);
+    i === 0 ? cCtx.moveTo(x, y) : cCtx.lineTo(x, y);
+  }
+  cCtx.stroke();
+
+  // data dots
+  const dotStep = Math.max(1, Math.floor(vtData.length / 70));
+  cCtx.fillStyle = '#1a56db';
+  for (let i = 0; i < vtData.length; i += dotStep) {
+    cCtx.beginPath(); cCtx.arc(ctx_t(vtData[i].t, tMin, tMax), ctx_v(vtData[i].v, vMin, vMax), 2.2, 0, Math.PI * 2); cCtx.fill();
+  }
+
+  // current point highlight
+  const last = vtData[vtData.length - 1];
+  const lx = ctx_t(last.t, tMin, tMax), ly = ctx_v(last.v, vMin, vMax);
+  cCtx.fillStyle = '#e63946';
+  cCtx.beginPath(); cCtx.arc(lx, ly, 5, 0, Math.PI * 2); cCtx.fill();
+  cCtx.strokeStyle = '#fff'; cCtx.lineWidth = 2; cCtx.stroke();
+
+  // slope annotation
+  if (Math.abs(a) > 0.005 && vRange > 0) {
+    const dtSpan = (tMax - tMin) * 0.06;
+    const dtPx = dtSpan / (tMax - tMin) * CPW;
+    const dv_Px = -(a * dtSpan) / vRange * CPH;
+    const len = Math.sqrt(dtPx * dtPx + dv_Px * dv_Px);
+    if (len > 12) {
+      const sc = 55 / len;
+      const dx = dtPx * sc, dy = dv_Px * sc;
+      cCtx.strokeStyle = '#e63946'; cCtx.lineWidth = 2;
+      cCtx.setLineDash([5, 3]);
+      cCtx.beginPath(); cCtx.moveTo(lx - dx, ly - dy); cCtx.lineTo(lx + dx, ly + dy); cCtx.stroke();
+      cCtx.setLineDash([]);
+      const labelX = Math.min(lx + dx + 8, CW - 125);
+      const labelY = Math.max(ly + dy - 8, 16);
+      cCtx.fillStyle = '#e63946';
+      cCtx.font = 'bold 11px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+      cCtx.textAlign = 'left';
+      cCtx.fillText(`k = ${a.toFixed(2)} m/s²`, labelX, labelY);
     }
-  });
+  }
+
+  // displacement label
+  const area = computeArea();
+  cCtx.fillStyle = 'rgba(26, 86, 219, 0.85)';
+  cCtx.font = 'bold 12px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+  cCtx.textAlign = 'left';
+  cCtx.fillText(`Area = Displacement = ${s.toFixed(1)} m (Trapezoidal: ${area.toFixed(1)} m)`, CPAD.left + 8, CPAD.top + CPH - 8);
 }
 
-function sendToChart() {
-  if (!chartWindow || chartWindow.closed || !chartReady) return;
-  chartWindow.postMessage({
-    type: 'update',
-    vtData: vtData.map(d => ({ t: d.t, v: d.v })),
-    currentAccel: a,
-    totalDisplacement: s,
-  }, '*');
-}
+// chart hover tooltip
+const $tooltip = document.getElementById('chartTooltip');
+chartCanvas.addEventListener('mousemove', e => {
+  if (vtData.length < 2) return;
+  const rect = chartCanvas.getBoundingClientRect();
+  const scaleX = CW / rect.width;
+  const scaleY = CH / rect.height;
+  const mx = (e.clientX - rect.left) * scaleX;
+  const my = (e.clientY - rect.top) * scaleY;
+
+  // find nearest point
+  let tMin2 = 0, tMax2 = 10, vMin2 = -5, vMax2 = 5;
+  if (vtData.length > 0) {
+    tMax2 = Math.max(vtData[vtData.length - 1].t + 1, 8);
+    const allV = vtData.map(d => d.v);
+    vMax2 = Math.max(2, ...allV) * 1.2;
+    vMin2 = Math.min(-2, ...allV) * 1.2;
+    if (vMin2 > 0) vMin2 = 0;
+    if (vMax2 < 0) vMax2 = 0;
+  }
+
+  let best = null, bestDist = Infinity;
+  vtData.forEach(d => {
+    const x = ctx_t(d.t, tMin2, tMax2), y = ctx_v(d.v, vMin2, vMax2);
+    const dist = (mx - x) ** 2 + (my - y) ** 2;
+    if (dist < bestDist) { bestDist = dist; best = d; }
+  });
+
+  if (best && bestDist < 300) {
+    $tooltip.style.display = 'block';
+    $tooltip.style.left   = (e.clientX + 18) + 'px';
+    $tooltip.style.top    = (e.clientY - 38) + 'px';
+    $tooltip.textContent  = `t = ${best.t.toFixed(2)} s  |  v = ${best.v.toFixed(2)} m/s`;
+  } else {
+    $tooltip.style.display = 'none';
+  }
+});
+chartCanvas.addEventListener('mouseleave', () => { $tooltip.style.display = 'none'; });
 
 // ──────────────────────────────────────────────
 //  8. GAME LOOP
@@ -425,15 +599,15 @@ function gameLoop(now) {
 
     updatePhysics(dt);
 
-    // sample v‑t data @ ~10 Hz
+    // sample v‑t data & redraw chart @ ~10 Hz
     if (now - lastSample > 90) {
       vtData.push({ t, v });
       lastSample = now;
-      sendToChart();
+      drawChart();
     }
   }
 
-  render();
+  renderGame();
   requestAnimationFrame(gameLoop);
 }
 
@@ -446,7 +620,7 @@ function togglePause() {
   if (paused) {
     $pauseBtn.textContent = '▶ Resume';
     $status.textContent = 'Paused';
-    lastTime = 0;          // reset so dt doesn't spike on resume
+    lastTime = 0;
   } else {
     $pauseBtn.textContent = '⏸ Pause';
     $status.textContent = '';
@@ -461,13 +635,10 @@ function stopGame() {
   paused  = false;
   $config.style.display  = 'flex';
   $wrapper.style.display = 'none';
+  $chart.style.display   = 'none';
   $bottom.style.display  = 'none';
   $pauseBtn.textContent  = '⏸ Pause';
   $status.textContent    = '';
-  // close chart window
-  if (chartWindow && !chartWindow.closed) chartWindow.close();
-  chartWindow = null;
-  chartReady  = false;
 }
 
 // ──────────────────────────────────────────────
@@ -481,6 +652,7 @@ function startGame() {
 
   $config.style.display  = 'none';
   $wrapper.style.display = 'block';
+  $chart.style.display   = 'block';
   $bottom.style.display  = 'flex';
 
   running    = true;
@@ -493,9 +665,9 @@ function startGame() {
   $pauseBtn.textContent = '⏸ Pause';
   $status.textContent   = '';
 
-  render();
+  renderGame();
+  drawChart();
   requestAnimationFrame(gameLoop);
-  openChartWindow();
 }
 
 // ──────────────────────────────────────────────
@@ -511,24 +683,15 @@ window.addEventListener('keyup', e => {
 });
 
 // ──────────────────────────────────────────────
-// 13. BUTTONS & HOUSEKEEPING
+// 13. BUTTONS
 // ──────────────────────────────────────────────
 $pauseBtn.addEventListener('click', togglePause);
 $stopBtn.addEventListener('click', stopGame);
-$chartBtn.addEventListener('click', openChartWindow);
-
-setInterval(() => {
-  if (chartWindow && chartWindow.closed) {
-    $status.textContent = 'v-t Graph closed. Click button to reopen.';
-    chartWindow = null;
-    chartReady  = false;
-  }
-}, 1000);
-
 document.getElementById('startBtn').addEventListener('click', startGame);
 
-// draw initial still frame
-render();
+// draw initial still frames
+renderGame();
+drawChart();
 </script>
 </body>
 </html>
