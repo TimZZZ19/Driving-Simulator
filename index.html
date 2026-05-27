@@ -59,6 +59,13 @@
   }
   #chartBtn:hover { background: #2a2a3e; color: #fff; }
   #statusText { font-size: 0.8rem; color: #666; }
+  #pauseBtn, #stopBtn {
+    padding: 7px 18px; border: 1px solid #555; border-radius: 6px;
+    background: transparent; color: #ccc; cursor: pointer; font-size: 0.85rem;
+    transition: all 0.2s;
+  }
+  #pauseBtn:hover { background: #2a3a2e; color: #fff; border-color: #22c55e; }
+  #stopBtn:hover { background: #3a1a1a; color: #fff; border-color: #e63946; }
 </style>
 </head>
 <body>
@@ -86,6 +93,8 @@
 
 <div id="bottomBar">
   <span>Controls: <span class="keyHint brake">J</span> Brake &nbsp; <span class="keyHint accel">K</span> Accelerator</span>
+  <button id="pauseBtn">⏸ Pause</button>
+  <button id="stopBtn">⏹ Stop</button>
   <button id="chartBtn">📈 Open v-t Graph</button>
   <span id="statusText"></span>
 </div>
@@ -110,6 +119,8 @@ const $wrapper  = document.getElementById('gameWrapper');
 const $bottom   = document.getElementById('bottomBar');
 const $status   = document.getElementById('statusText');
 const $chartBtn = document.getElementById('chartBtn');
+const $pauseBtn = document.getElementById('pauseBtn');
+const $stopBtn  = document.getElementById('stopBtn');
 const $accelIn  = document.getElementById('accelInput');
 const $brakeIn  = document.getElementById('brakeInput');
 
@@ -119,6 +130,7 @@ const $brakeIn  = document.getElementById('brakeInput');
 let cfgAccel = 2;            // m/s²  (positive when K pressed)
 let cfgBrake = 3;            // m/s²  (magnitude; negative when J pressed)
 let running  = false;
+let paused   = false;
 
 // physics
 let t = 0, v = 0, s = 0, a = 0;
@@ -395,18 +407,21 @@ function sendToChart() {
 function gameLoop(now) {
   if (!running) return;
   if (!lastTime) lastTime = now;
-  let dt = (now - lastTime) / 1000;
-  if (dt <= 0) dt = 0.016;
-  if (dt > 0.1) dt = 0.1;
-  lastTime = now;
 
-  updatePhysics(dt);
+  if (!paused) {
+    let dt = (now - lastTime) / 1000;
+    if (dt <= 0) dt = 0.016;
+    if (dt > 0.1) dt = 0.1;
+    lastTime = now;
 
-  // sample v‑t data @ ~10 Hz
-  if (now - lastSample > 90) {
-    vtData.push({ t, v });
-    lastSample = now;
-    sendToChart();
+    updatePhysics(dt);
+
+    // sample v‑t data @ ~10 Hz
+    if (now - lastSample > 90) {
+      vtData.push({ t, v });
+      lastSample = now;
+      sendToChart();
+    }
   }
 
   render();
@@ -414,7 +429,40 @@ function gameLoop(now) {
 }
 
 // ──────────────────────────────────────────────
-//  9. START
+//  9. PAUSE / RESUME
+// ──────────────────────────────────────────────
+function togglePause() {
+  if (!running) return;
+  paused = !paused;
+  if (paused) {
+    $pauseBtn.textContent = '▶ Resume';
+    $status.textContent = 'Paused';
+    lastTime = 0;          // reset so dt doesn't spike on resume
+  } else {
+    $pauseBtn.textContent = '⏸ Pause';
+    $status.textContent = '';
+  }
+}
+
+// ──────────────────────────────────────────────
+// 10. STOP
+// ──────────────────────────────────────────────
+function stopGame() {
+  running = false;
+  paused  = false;
+  $config.style.display  = 'flex';
+  $wrapper.style.display = 'none';
+  $bottom.style.display  = 'none';
+  $pauseBtn.textContent  = '⏸ Pause';
+  $status.textContent    = '';
+  // close chart window
+  if (chartWindow && !chartWindow.closed) chartWindow.close();
+  chartWindow = null;
+  chartReady  = false;
+}
+
+// ──────────────────────────────────────────────
+// 11. START
 // ──────────────────────────────────────────────
 function startGame() {
   cfgAccel = parseFloat($accelIn.value) || 2;
@@ -427,11 +475,14 @@ function startGame() {
   $bottom.style.display  = 'flex';
 
   running    = true;
+  paused     = false;
   t = 0; v = 0; s = 0; a = 0; bgOffset = 0;
   vtData     = [{ t: 0, v: 0 }];
   lastTime   = 0;
   lastSample = 0;
   for (const k in keys) keys[k] = false;
+  $pauseBtn.textContent = '⏸ Pause';
+  $status.textContent   = '';
 
   render();
   requestAnimationFrame(gameLoop);
@@ -439,7 +490,7 @@ function startGame() {
 }
 
 // ──────────────────────────────────────────────
-// 10. INPUT
+// 12. INPUT
 // ──────────────────────────────────────────────
 window.addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
@@ -451,8 +502,10 @@ window.addEventListener('keyup', e => {
 });
 
 // ──────────────────────────────────────────────
-// 11. CHART BUTTON & HOUSEKEEPING
+// 13. BUTTONS & HOUSEKEEPING
 // ──────────────────────────────────────────────
+$pauseBtn.addEventListener('click', togglePause);
+$stopBtn.addEventListener('click', stopGame);
 $chartBtn.addEventListener('click', openChartWindow);
 
 setInterval(() => {
