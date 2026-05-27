@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Driving Simulator</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #1a1a2e;
+    display: flex; flex-direction: column; align-items: center;
+    min-height: 100vh;
+    font-family: 'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+    color: #e0e0e0; user-select: none;
+  }
+  h1 { margin: 18px 0 2px; font-size: 1.4rem; font-weight: 500; letter-spacing: 2px; color: #ccc; }
+  .subtitle { font-size: 0.78rem; color: #777; margin-bottom: 14px; }
+
+  /* ── Config Panel ── */
+  #configPanel {
+    background: #16213e; border-radius: 12px; padding: 26px 40px;
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.45);
+  }
+  .configRow { display: flex; align-items: center; gap: 14px; }
+  .configRow label { font-size: 0.9rem; color: #aaa; white-space: nowrap; }
+  .configRow input {
+    width: 80px; padding: 6px 10px; border: 1px solid #334; border-radius: 6px;
+    background: #0f3460; color: #fff; font-size: 1rem; text-align: center; outline: none;
+  }
+  .configRow input:focus { border-color: #4361ee; }
+  #startBtn {
+    padding: 10px 40px; border: none; border-radius: 8px;
+    background: #4361ee; color: #fff; font-size: 1rem; font-weight: 600;
+    cursor: pointer; transition: background 0.2s; margin-top: 8px;
+  }
+  #startBtn:hover { background: #3a56d4; }
+
+  /* ── Game Wrapper ── */
+  #gameWrapper {
+    position: relative; display: none;
+    border-radius: 10px; overflow: hidden;
+    box-shadow: 0 4px 28px rgba(0,0,0,0.5);
+  }
+  canvas { display: block; }
+
+  /* ── Bottom Bar ── */
+  #bottomBar { display: none; align-items: center; gap: 28px; margin-top: 14px; }
+  .keyHint {
+    display: inline-block; background: #333; color: #eee;
+    padding: 3px 11px; border-radius: 4px; font-weight: 700; font-size: 0.85rem; margin: 0 3px;
+  }
+  .keyHint.brake  { border-bottom: 3px solid #e63946; }
+  .keyHint.accel  { border-bottom: 3px solid #22c55e; }
+  #chartBtn {
+    padding: 7px 20px; border: 1px solid #555; border-radius: 6px;
+    background: transparent; color: #aaa; cursor: pointer; font-size: 0.85rem;
+    transition: all 0.2s;
+  }
+  #chartBtn:hover { background: #2a2a3e; color: #fff; }
+  #statusText { font-size: 0.8rem; color: #666; }
+</style>
+</head>
+<body>
+
+<h1>DRIVING SIMULATOR</h1>
+<p class="subtitle">Real-time Kinematics Demonstration</p>
+
+<!-- ═══════════════ CONFIG ═══════════════ -->
+<div id="configPanel">
+  <div class="configRow">
+    <label>Acceleration a<sub>accel</sub> (m/s²):</label>
+    <input id="accelInput" type="number" value="2" min="0.1" max="20" step="0.1">
+  </div>
+  <div class="configRow">
+    <label>Braking a<sub>brake</sub> (m/s²):</label>
+    <input id="brakeInput" type="number" value="3" min="0.1" max="20" step="0.1">
+  </div>
+  <button id="startBtn">Start Driving</button>
+</div>
+
+<!-- ═══════════════ GAME ═══════════════ -->
+<div id="gameWrapper">
+  <canvas id="gameCanvas"></canvas>
+</div>
+
+<div id="bottomBar">
+  <span>Controls: <span class="keyHint brake">J</span> Brake &nbsp; <span class="keyHint accel">K</span> Accelerator</span>
+  <button id="chartBtn">📈 Open v-t Graph</button>
+  <span id="statusText"></span>
+</div>
+
+<!-- ═══════════════ SCRIPT ═══════════════ -->
+<script>
+// ──────────────────────────────────────────────
+//  1. CONSTANTS & DOM REFS
+// ──────────────────────────────────────────────
+const W = 960, H = 440;
+const CAR_X = 200;
+const ROAD_Y = 320;          // road surface Y in canvas
+const PX_PER_M = 120;        // pixels scrolled per metre travelled
+
+const canvas = document.getElementById('gameCanvas');
+canvas.width  = W;
+canvas.height = H;
+const ctx = canvas.getContext('2d');
+
+const $config   = document.getElementById('configPanel');
+const $wrapper  = document.getElementById('gameWrapper');
+const $bottom   = document.getElementById('bottomBar');
+const $status   = document.getElementById('statusText');
+const $chartBtn = document.getElementById('chartBtn');
+const $accelIn  = document.getElementById('accelInput');
+const $brakeIn  = document.getElementById('brakeInput');
+
+// ──────────────────────────────────────────────
+//  2. STATE
+// ──────────────────────────────────────────────
+let cfgAccel = 2;            // m/s²  (positive when K pressed)
+let cfgBrake = 3;            // m/s²  (magnitude; negative when J pressed)
+let running  = false;
+
+// physics
+let t = 0, v = 0, s = 0, a = 0;
+let lastTime = 0;
+
+// input
+const keys = {};
+
+// scrolling background
+let bgOffset = 0;
+
+// v‑t data for the chart window — sampled at ~10 Hz
+let vtData = [];
+let lastSample = 0;
+
+// chart window
+let chartWindow = null;
+let chartReady  = false;
+
+// ──────────────────────────────────────────────
+//  3. SCENERY (pre‑generated)
+// ──────────────────────────────────────────────
+let mountains = [], trees = [], buildings = [];
+(function generateScenery() {
+  for (let i = 0; i < 30; i++)
+    mountains.push({ x: i * 180 + Math.random() * 120, h: 40 + Math.random() * 80, w: 80 + Math.random() * 140 });
+  for (let i = 0; i < 60; i++)
+    trees.push({ x: i * 90 + Math.random() * 70, h: 25 + Math.random() * 45, s: 0.6 + Math.random() * 0.8 });
+  for (let i = 0; i < 25; i++)
+    buildings.push({ x: i * 220 + Math.random() * 160, w: 30 + Math.random() * 50, h: 50 + Math.random() * 90 });
+})();
+
+// ──────────────────────────────────────────────
+//  4. DRAWING HELPERS
+// ──────────────────────────────────────────────
+function rrect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y); ctx.arcTo(x + w, y, x + w, y + r, r);
+  ctx.lineTo(x + w, y + h - r); ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+  ctx.lineTo(x + r, y + h); ctx.arcTo(x, y + h, x, y + h - r, r);
+  ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
+  ctx.closePath();
+}
+
+function drawSky() {
+  const g = ctx.createLinearGradient(0, 0, 0, ROAD_Y);
+  g.addColorStop(0, '#4a90d9'); g.addColorStop(0.55, '#87ceeb'); g.addColorStop(1, '#c5e3f6');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, ROAD_Y);
+}
+
+function scrollX(baseX, offset, rate, wrap) {
+  return ((baseX - offset * rate) % wrap + wrap) % wrap - 200;
+}
+
+function drawScenery(offset) {
+  // mountains — slowest parallax
+  ctx.fillStyle = '#5b8c5a';
+  mountains.forEach(m => {
+    const x = scrollX(m.x, offset, 0.6, 3600);
+    if (x < -200 || x > W + 200) return;
+    ctx.beginPath();
+    ctx.moveTo(x, ROAD_Y); ctx.lineTo(x + m.w / 2, ROAD_Y - m.h); ctx.lineTo(x + m.w, ROAD_Y);
+    ctx.closePath(); ctx.fill();
+  });
+  // trees — medium parallax
+  trees.forEach(t => {
+    const x = scrollX(t.x, offset, 0.95, 5400);
+    if (x < -80 || x > W + 80) return;
+    ctx.fillStyle = '#8B6914';
+    ctx.fillRect(x - 2, ROAD_Y - t.h * 0.65, 5, t.h * 0.65);
+    ctx.fillStyle = '#3a7d3a';
+    ctx.beginPath(); ctx.arc(x + 0.5, ROAD_Y - t.h * 0.7, t.h * 0.33, 0, Math.PI * 2); ctx.fill();
+  });
+  // buildings — slowest
+  buildings.forEach(b => {
+    const x = scrollX(b.x, offset, 0.5, 6000);
+    if (x < -100 || x > W + 100) return;
+    ctx.fillStyle = '#c4a882';
+    ctx.fillRect(x, ROAD_Y - b.h, b.w, b.h);
+    ctx.fillStyle = '#7a9eb1';
+    for (let wy = ROAD_Y - b.h + 8; wy < ROAD_Y - 6; wy += 18)
+      for (let wx = x + 5; wx < x + b.w - 5; wx += 14)
+        ctx.fillRect(wx, wy, 8, 10);
+  });
+}
+
+function drawRoad(offset) {
+  const off = (offset % 120 + 120) % 120;
+  ctx.fillStyle = '#3d3d3d';
+  ctx.fillRect(0, ROAD_Y, W, H - ROAD_Y);
+  ctx.fillStyle = '#555';
+  ctx.fillRect(0, ROAD_Y, W, 4);
+  ctx.fillStyle = '#fff';
+  for (let x = -off; x < W; x += 60) ctx.fillRect(x, ROAD_Y + 60 - 1.5, 30, 3);
+}
+
+function drawCar(displacement) {
+  const cx = CAR_X, cy = ROAD_Y - 8;
+  const wR = 14, wb = 70;
+  const angle = displacement / (wR / 100);
+
+  // shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.18)';
+  ctx.beginPath(); ctx.ellipse(cx + 2, cy + wR + 4, 56, 8, 0, 0, Math.PI * 2); ctx.fill();
+
+  // wheels
+  [cx - wb / 2, cx + wb / 2].forEach(wx => {
+    ctx.save();
+    ctx.translate(wx, cy + wR);
+    ctx.rotate(angle);
+    ctx.fillStyle = '#222'; ctx.beginPath(); ctx.arc(0, 0, wR, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#888'; ctx.beginPath(); ctx.arc(0, 0, wR * 0.55, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#555'; ctx.lineWidth = 2;
+    for (let i = 0; i < 5; i++) {
+      const sa = (i / 5) * Math.PI * 2;
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(sa) * wR * 0.5, Math.sin(sa) * wR * 0.5); ctx.stroke();
+    }
+    ctx.fillStyle = '#ccc'; ctx.beginPath(); ctx.arc(0, 0, wR * 0.18, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  });
+
+  // body
+  const bx = cx - 58, by = cy - 18, bw = 116, bh = 26;
+  ctx.fillStyle = '#d4343e';
+  ctx.beginPath();
+  ctx.moveTo(bx + 8, by + bh); ctx.lineTo(bx + 4, by + bh * 0.55);
+  ctx.quadraticCurveTo(bx, by + 2, bx + 14, by);
+  ctx.lineTo(bx + bw - 14, by);
+  ctx.quadraticCurveTo(bx + bw, by + 4, bx + bw + 2, by + bh * 0.6);
+  ctx.lineTo(bx + bw - 8, by + bh);
+  ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = '#a02030'; ctx.lineWidth = 2; ctx.stroke();
+
+  // cabin
+  ctx.fillStyle = '#c0303a';
+  ctx.beginPath();
+  ctx.moveTo(bx + 30, by); ctx.lineTo(bx + 26, by - 16);
+  ctx.quadraticCurveTo(bx + 40, by - 22, bx + 58, by - 20);
+  ctx.lineTo(bx + 82, by - 20);
+  ctx.quadraticCurveTo(bx + 94, by - 18, bx + 92, by - 6);
+  ctx.lineTo(bx + 88, by);
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+
+  // windows
+  ctx.fillStyle = '#a8d8ea';
+  [{ x: 38, w: 18 }, { x: 64, w: 22 }].forEach(w => {
+    ctx.beginPath();
+    ctx.moveTo(bx + w.x, by - 2); ctx.lineTo(bx + w.x, by - 14);
+    ctx.lineTo(bx + w.x + w.w, by - 14); ctx.lineTo(bx + w.x + w.w, by - 2);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#a02030'; ctx.lineWidth = 1; ctx.stroke();
+  });
+  // lights
+  ctx.fillStyle = '#ffe066'; ctx.beginPath(); ctx.arc(bx + bw - 6, by + bh * 0.5, 5, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#ff3333'; ctx.fillRect(bx - 2, by + bh * 0.3, 5, 8);
+}
+
+function drawHUD() {
+  const hx = W - 210, hy = 16;
+  ctx.fillStyle = 'rgba(0,0,0,0.65)'; rrect(hx, hy, 194, 124, 10); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth = 1; ctx.stroke();
+
+  const rows = [
+    { lbl: 'Speed v',       val: v.toFixed(1),  unit: 'm/s',   clr: '#4fc3f7' },
+    { lbl: 'Time t',        val: t.toFixed(1),  unit: 's',     clr: '#fff' },
+    { lbl: 'Displacement s',val: s.toFixed(1),  unit: 'm',     clr: '#81c784' },
+    { lbl: 'Acceleration a',val: a.toFixed(2),  unit: 'm/s²',  clr: a >= 0 ? '#ffb74d' : '#ef5350' },
+  ];
+  ctx.textBaseline = 'middle';
+  rows.forEach((r, i) => {
+    const y = hy + 12 + i * 28;
+    ctx.fillStyle = '#999'; ctx.font = '12px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+    ctx.textAlign = 'left';  ctx.fillText(r.lbl, hx + 14, y);
+    ctx.fillStyle = r.clr;   ctx.font = 'bold 17px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+    ctx.textAlign = 'right'; ctx.fillText(r.val, hx + 140, y);
+    ctx.fillStyle = '#777';  ctx.font = '11px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+    ctx.fillText(r.unit, hx + 178, y);
+  });
+}
+
+function drawPedals() {
+  const px = 20, py = H - 80;
+  ctx.fillStyle = 'rgba(0,0,0,0.5)'; rrect(px, py, 56, 68, 8); ctx.fill();
+  // J – brake
+  ctx.fillStyle = keys['j'] ? '#e63946' : '#444';
+  ctx.fillRect(px + 8,  py + 10, 16, 22);
+  ctx.fillStyle = '#ccc'; ctx.font = 'bold 10px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+  ctx.textAlign = 'center'; ctx.fillText('J', px + 16, py + 26);
+  ctx.fillStyle = '#999'; ctx.font = '8px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+  ctx.fillText('Brake', px + 16, py + 40);
+  // K – accelerator
+  ctx.fillStyle = keys['k'] ? '#22c55e' : '#444';
+  ctx.fillRect(px + 30, py + 10, 16, 22);
+  ctx.fillStyle = '#ccc'; ctx.font = 'bold 10px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+  ctx.fillText('K', px + 38, py + 26);
+  ctx.fillStyle = '#999'; ctx.font = '8px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+  ctx.fillText('Accel', px + 38, py + 40);
+}
+
+// ──────────────────────────────────────────────
+//  5. RENDER FRAME
+// ──────────────────────────────────────────────
+function render() {
+  ctx.clearRect(0, 0, W, H);
+  drawSky();
+  drawScenery(bgOffset);
+  drawRoad(bgOffset);
+  drawCar(s);
+  drawHUD();
+  drawPedals();
+}
+
+// ──────────────────────────────────────────────
+//  6. PHYSICS (frame‑rate independent)
+// ──────────────────────────────────────────────
+function updatePhysics(dt) {
+  // determine instantaneous acceleration
+  if (keys['k'])      a =  cfgAccel;
+  else if (keys['j']) a = -cfgBrake;
+  else                a =  0;
+
+  const nextV = v + a * dt;
+  if (nextV < 0) { v = 0; a = 0; }
+  else           { v = nextV; }
+
+  s += v * dt;
+  t += dt;
+  bgOffset += v * PX_PER_M * dt;
+}
+
+// ──────────────────────────────────────────────
+//  7. CHART WINDOW MANAGEMENT
+// ──────────────────────────────────────────────
+function openChartWindow() {
+  if (chartWindow && !chartWindow.closed) {
+    chartWindow.focus();
+    return;
+  }
+  // Resolve path to chart.html (same directory as index.html)
+  const base = location.href.replace(/[^/]*$/, '');
+  chartWindow = window.open(base + 'chart.html', 'vtChart', 'width=600,height=500');
+  if (!chartWindow) {
+    $status.textContent = 'Popup blocked. Please allow popups for this page.';
+    return;
+  }
+  chartReady = false;
+  $status.textContent = 'v-t Graph window opened';
+
+  // Listen for 'ready' signal from chart window
+  window.addEventListener('message', function onReady(e) {
+    if (e.data && e.data.type === 'chartReady') {
+      chartReady = true;
+      // send full history immediately
+      sendToChart();
+    }
+  });
+}
+
+function sendToChart() {
+  if (!chartWindow || chartWindow.closed || !chartReady) return;
+  chartWindow.postMessage({
+    type: 'update',
+    vtData: vtData.map(d => ({ t: d.t, v: d.v })),
+    currentAccel: a,
+    totalDisplacement: s,
+  }, '*');
+}
+
+// ──────────────────────────────────────────────
+//  8. GAME LOOP
+// ──────────────────────────────────────────────
+function gameLoop(now) {
+  if (!running) return;
+  if (!lastTime) lastTime = now;
+  let dt = (now - lastTime) / 1000;
+  if (dt <= 0) dt = 0.016;
+  if (dt > 0.1) dt = 0.1;
+  lastTime = now;
+
+  updatePhysics(dt);
+
+  // sample v‑t data @ ~10 Hz
+  if (now - lastSample > 90) {
+    vtData.push({ t, v });
+    lastSample = now;
+    sendToChart();
+  }
+
+  render();
+  requestAnimationFrame(gameLoop);
+}
+
+// ──────────────────────────────────────────────
+//  9. START
+// ──────────────────────────────────────────────
+function startGame() {
+  cfgAccel = parseFloat($accelIn.value) || 2;
+  cfgBrake = parseFloat($brakeIn.value) || 3;
+  if (cfgAccel <= 0) cfgAccel = 2;
+  if (cfgBrake <= 0) cfgBrake = 3;
+
+  $config.style.display  = 'none';
+  $wrapper.style.display = 'block';
+  $bottom.style.display  = 'flex';
+
+  running    = true;
+  t = 0; v = 0; s = 0; a = 0; bgOffset = 0;
+  vtData     = [{ t: 0, v: 0 }];
+  lastTime   = 0;
+  lastSample = 0;
+  for (const k in keys) keys[k] = false;
+
+  render();
+  requestAnimationFrame(gameLoop);
+  openChartWindow();
+}
+
+// ──────────────────────────────────────────────
+// 10. INPUT
+// ──────────────────────────────────────────────
+window.addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  if (k === 'j' || k === 'k') { e.preventDefault(); keys[k] = true; }
+});
+window.addEventListener('keyup', e => {
+  const k = e.key.toLowerCase();
+  if (k === 'j' || k === 'k') { e.preventDefault(); keys[k] = false; }
+});
+
+// ──────────────────────────────────────────────
+// 11. CHART BUTTON & HOUSEKEEPING
+// ──────────────────────────────────────────────
+$chartBtn.addEventListener('click', openChartWindow);
+
+setInterval(() => {
+  if (chartWindow && chartWindow.closed) {
+    $status.textContent = 'v-t Graph closed. Click button to reopen.';
+    chartWindow = null;
+    chartReady  = false;
+  }
+}, 1000);
+
+document.getElementById('startBtn').addEventListener('click', startGame);
+
+// draw initial still frame
+render();
+</script>
+</body>
+</html>
