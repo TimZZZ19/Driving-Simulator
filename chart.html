@@ -33,7 +33,7 @@
 <h2>v-t Graph — Velocity-Time Relationship</h2>
 <canvas id="vtCanvas" width="560" height="380"></canvas>
 <div class="legend">
-  <span><span class="swatch area"></span> Area under curve = Displacement</span>
+  <span><span class="swatch area"></span> Area under curve = Displacement (net)</span>
   <span><span class="swatch slope"></span> Dashed red = Slope (instantaneous acceleration)</span>
 </div>
 <div class="info-row" id="info">Waiting for data…</div>
@@ -58,13 +58,13 @@ let vtData   = [];          // [{t, v}]
 let curAccel = 0;          // current acceleration (for slope annotation)
 let totalDisplacement = 0; // from main window's physics integration
 let tMin = 0, tMax = 10;
-let vMax = 5;
+let vMin = -5, vMax = 5;
 
 // ──────────────────────────────────────────────
 //  3. COORDINATE HELPERS
 // ──────────────────────────────────────────────
 function tx(tVal) { return PAD.left + (tVal - tMin) / (tMax - tMin) * PW; }
-function ty(vVal) { return PAD.top + PH - (vVal / vMax) * PH; }
+function ty(vVal) { return PAD.top + PH - (vVal - vMin) / (vMax - vMin) * PH; }
 
 // ──────────────────────────────────────────────
 //  4. FIND NEAREST DATA POINT (hover)
@@ -80,7 +80,7 @@ function nearestPoint(mx, my) {
 }
 
 // ──────────────────────────────────────────────
-//  5. TRAPEZOIDAL AREA (for self‑computed displacement)
+//  5. TRAPEZOIDAL AREA (signed — net displacement)
 // ──────────────────────────────────────────────
 function computeArea() {
   let area = 0;
@@ -99,38 +99,57 @@ function draw() {
   if (vtData.length > 0) {
     tMax = Math.max(vtData[vtData.length - 1].t + 1, 8);
     tMin = 0;
-    vMax = Math.max(2, ...vtData.map(d => d.v)) * 1.2;
+    const allV = vtData.map(d => d.v);
+    const maxV = Math.max(2, ...allV);
+    const minV = Math.min(-2, ...allV);
+    vMax = maxV * 1.2;
+    vMin = minV * 1.2;
+    // ensure v=0 line is always within the chart
+    if (vMin > 0) vMin = 0;
+    if (vMax < 0) vMax = 0;
   }
+
+  const vRange = vMax - vMin;
 
   // ── Grid ──
   const tNice = niceStep(tMax - tMin, 5);
-  const vNice = niceStep(vMax, 5);
+  const vNice = niceStep(vRange, 5);
   ctx.strokeStyle = '#ececec'; ctx.lineWidth = 0.5;
   for (let ti = 0; ti <= tMax + tNice; ti += tNice) {
     if (ti < tMin) continue;
     ctx.beginPath(); ctx.moveTo(tx(ti), PAD.top); ctx.lineTo(tx(ti), PAD.top + PH); ctx.stroke();
   }
-  for (let vi = 0; vi <= vMax + vNice; vi += vNice) {
+  for (let vi = vMin - (vMin % vNice || 0); vi <= vMax + vNice; vi += vNice) {
     ctx.beginPath(); ctx.moveTo(PAD.left, ty(vi)); ctx.lineTo(PAD.left + PW, ty(vi)); ctx.stroke();
   }
 
   // ── Axes ──
   ctx.strokeStyle = '#333'; ctx.lineWidth = 1.5;
+  // v-axis (y)
   ctx.beginPath(); ctx.moveTo(PAD.left, PAD.top); ctx.lineTo(PAD.left, PAD.top + PH); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(PAD.left, PAD.top + PH); ctx.lineTo(PAD.left + PW, PAD.top + PH); ctx.stroke();
+  // t-axis (x) — at v=0, or at bottom if v=0 is off-screen
+  const yZero = ty(0);
+  const axisY = Math.max(PAD.top, Math.min(PAD.top + PH, yZero));
+  ctx.beginPath(); ctx.moveTo(PAD.left, axisY); ctx.lineTo(PAD.left + PW, axisY); ctx.stroke();
   // arrowheads
   ctx.fillStyle = '#333';
   ctx.beginPath(); ctx.moveTo(PAD.left, PAD.top - 7); ctx.lineTo(PAD.left - 5, PAD.top + 2); ctx.lineTo(PAD.left + 5, PAD.top + 2); ctx.fill();
-  ctx.beginPath(); ctx.moveTo(PAD.left + PW + 7, PAD.top + PH); ctx.lineTo(PAD.left + PW - 3, PAD.top + PH - 5); ctx.lineTo(PAD.left + PW - 3, PAD.top + PH + 5); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(PAD.left + PW + 7, axisY); ctx.lineTo(PAD.left + PW - 3, axisY - 5); ctx.lineTo(PAD.left + PW - 3, axisY + 5); ctx.fill();
 
   // ── Tick labels ──
   ctx.fillStyle = '#666'; ctx.font = '10px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
   ctx.textAlign = 'center';
   for (let ti = 0; ti <= tMax + tNice; ti += tNice)
-    if (ti >= tMin) ctx.fillText(ti, tx(ti), PAD.top + PH + 16);
+    if (ti >= tMin) ctx.fillText(ti, tx(ti), axisY + 16);
   ctx.textAlign = 'right';
-  for (let vi = 0; vi <= vMax + vNice; vi += vNice)
+  for (let vi = vMin - (vMin % vNice || 0); vi <= vMax + vNice; vi += vNice) {
+    if (Math.abs(vi) < vNice * 0.01) continue; // skip zero — or keep it
     ctx.fillText(vi % 1 === 0 ? vi : vi.toFixed(1), PAD.left - 7, ty(vi) + 4);
+  }
+  // always label v=0
+  if (vMin <= 0 && vMax >= 0) {
+    ctx.fillText('0', PAD.left - 7, yZero + 4);
+  }
 
   // ── Axis titles ──
   ctx.fillStyle = '#333'; ctx.font = '12px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
@@ -146,12 +165,13 @@ function draw() {
     return;
   }
 
-  // ── Area fill ──
+  // ── Area fill (between curve and t‑axis at v=0) ──
+  const y0 = ty(0);
   ctx.beginPath();
-  ctx.moveTo(tx(vtData[0].t), PAD.top + PH);
+  ctx.moveTo(tx(vtData[0].t), y0);
   for (let i = 0; i < vtData.length; i++)
-    ctx.lineTo(tx(vtData[i].t), ty(Math.max(vtData[i].v, 0)));
-  ctx.lineTo(tx(vtData[vtData.length - 1].t), PAD.top + PH);
+    ctx.lineTo(tx(vtData[i].t), ty(vtData[i].v));
+  ctx.lineTo(tx(vtData[vtData.length - 1].t), y0);
   ctx.closePath();
   ctx.fillStyle = 'rgba(66, 133, 244, 0.18)';
   ctx.fill();
@@ -180,10 +200,10 @@ function draw() {
   ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
 
   // ── Slope annotation ──
-  if (Math.abs(curAccel) > 0.005 && vMax > 0) {
+  if (Math.abs(curAccel) > 0.005 && vRange > 0) {
     const dtSpan = (tMax - tMin) * 0.06;
     const dtPx = dtSpan / (tMax - tMin) * PW;
-    const dv_Px = -(curAccel * dtSpan) / vMax * PH;
+    const dv_Px = -(curAccel * dtSpan) / vRange * PH;
     const len = Math.sqrt(dtPx * dtPx + dv_Px * dv_Px);
     if (len > 12) {
       const sc = 55 / len;

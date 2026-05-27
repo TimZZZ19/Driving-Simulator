@@ -132,7 +132,7 @@ let cfgBrake = 3;            // m/s²  (magnitude; negative when J pressed)
 let running  = false;
 let paused   = false;
 
-// physics
+// physics — v, s, a can all be negative now
 let t = 0, v = 0, s = 0, a = 0;
 let lastTime = 0;
 
@@ -234,6 +234,14 @@ function drawCar(displacement) {
   const wR = 14, wb = 70;
   const angle = displacement / (wR / 100);
 
+  // flip car horizontally when moving backwards
+  if (v < 0) {
+    ctx.save();
+    ctx.translate(cx, 0);
+    ctx.scale(-1, 1);
+    ctx.translate(-cx, 0);
+  }
+
   // shadow
   ctx.fillStyle = 'rgba(0,0,0,0.18)';
   ctx.beginPath(); ctx.ellipse(cx + 2, cy + wR + 4, 56, 8, 0, 0, Math.PI * 2); ctx.fill();
@@ -288,6 +296,8 @@ function drawCar(displacement) {
   // lights
   ctx.fillStyle = '#ffe066'; ctx.beginPath(); ctx.arc(bx + bw - 6, by + bh * 0.5, 5, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = '#ff3333'; ctx.fillRect(bx - 2, by + bh * 0.3, 5, 8);
+
+  if (v < 0) { ctx.restore(); }
 }
 
 function drawHUD() {
@@ -296,9 +306,9 @@ function drawHUD() {
   ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth = 1; ctx.stroke();
 
   const rows = [
-    { lbl: 'Speed v',       val: v.toFixed(1),  unit: 'm/s',   clr: '#4fc3f7' },
+    { lbl: 'Speed v',       val: v.toFixed(1),  unit: 'm/s',   clr: v < 0 ? '#ef5350' : '#4fc3f7' },
     { lbl: 'Time t',        val: t.toFixed(1),  unit: 's',     clr: '#fff' },
-    { lbl: 'Displacement s',val: s.toFixed(1),  unit: 'm',     clr: '#81c784' },
+    { lbl: 'Displacement s',val: s.toFixed(1),  unit: 'm',     clr: s < 0 ? '#ef5350' : '#81c784' },
     { lbl: 'Acceleration a',val: a.toFixed(2),  unit: 'm/s²',  clr: a >= 0 ? '#ffb74d' : '#ef5350' },
   ];
   ctx.textBaseline = 'middle';
@@ -316,7 +326,7 @@ function drawHUD() {
 function drawPedals() {
   const px = 20, py = H - 80;
   ctx.fillStyle = 'rgba(0,0,0,0.5)'; rrect(px, py, 56, 68, 8); ctx.fill();
-  // J – brake
+  // J – brake/reverse
   ctx.fillStyle = keys['j'] ? '#e63946' : '#444';
   ctx.fillRect(px + 8,  py + 10, 16, 22);
   ctx.fillStyle = '#ccc'; ctx.font = 'bold 10px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
@@ -350,13 +360,12 @@ function render() {
 // ──────────────────────────────────────────────
 function updatePhysics(dt) {
   // determine instantaneous acceleration
+  // J = negative acceleration (brake/reverse), K = positive (forward)
   if (keys['k'])      a =  cfgAccel;
   else if (keys['j']) a = -cfgBrake;
   else                a =  0;
 
-  const nextV = v + a * dt;
-  if (nextV < 0) { v = 0; a = 0; }
-  else           { v = nextV; }
+  v += a * dt;
 
   s += v * dt;
   t += dt;
