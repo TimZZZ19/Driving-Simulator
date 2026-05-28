@@ -624,7 +624,7 @@
       //  5. GAME RENDER FRAME
       // ──────────────────────────────────────────────
       function drawStartPole() {
-        const px = CAR_X - s * PX_PER_M;   // world origin mapped to screen
+        const px = CAR_X - s * PX_PER_M; // world origin mapped to screen
         if (px < -10 || px > W + 10) return;
         const bottom = ROAD_Y;
         const top = ROAD_Y - 80;
@@ -636,7 +636,9 @@
         ctx.fillRect(px - 9, bottom - 6, 18, 8);
         // flag sign
         ctx.fillStyle = "#e63946";
-        const fy = top, fw = 36, fh = 22;
+        const fy = top,
+          fw = 36,
+          fh = 22;
         ctx.beginPath();
         ctx.moveTo(px + 3, fy);
         ctx.lineTo(px + 3 + fw, fy + fh / 2);
@@ -645,7 +647,8 @@
         ctx.fill();
         // "0" label on flag
         ctx.fillStyle = "#fff";
-        ctx.font = 'bold 11px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+        ctx.font =
+          'bold 11px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText("0", px + 5 + fw / 2, fy + fh / 2);
@@ -953,7 +956,7 @@
             cCtx.font =
               'bold 11px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
             cCtx.textAlign = "left";
-            cCtx.fillText(`k = ${a.toFixed(2)} m/s²`, labelX, labelY);
+            cCtx.fillText(`a = ${a.toFixed(2)} m/s²`, labelX, labelY);
           }
         }
 
@@ -1014,7 +1017,7 @@
           $tooltip.style.top = e.clientY - 38 + "px";
           $tooltip.textContent = `t = ${best.t.toFixed(
             2
-          )} s  |  v = ${best.v.toFixed(2)} m/s`;
+          )} s  |  v = ${best.v.toFixed(2)} m/s  |  a = ${best.a.toFixed(2)} m/s²`;
         } else {
           $tooltip.style.display = "none";
         }
@@ -1040,7 +1043,7 @@
 
           // sample v‑t data & redraw chart @ ~10 Hz
           if (simStarted && now - lastSample > 90) {
-            vtData.push({ t, v });
+            vtData.push({ t, v, a });
             lastSample = now;
             drawChart();
           }
