@@ -55,12 +55,13 @@ Driving-Simulator/
      │         │    └── auto-scaled grid lines (nice numbers)
      │         │
      │         ├── 3b. Data Visualization
-     │         │    ├── blue fill area (displacement under curve)
+     │         │    ├── blue fill area (positive v, displacement forward)
+     │         │    ├── red fill area (negative v, displacement backward)
      │         │    ├── v-t curve (#1a56db, 2.5px)
      │         │    ├── data dots (subsampled for performance)
      │         │    ├── current point (red circle, white border)
      │         │    ├── slope annotation (dashed red line + k label)
-     │         │    └── area = displacement text (both rounded integer)
+     │         │    └── signed area labels: +pos (blue), −neg (red), net total (dark)
      │         │
      │         └── 3c. Tooltip (L548-585)
      │              └── nearest-point hover: t + v display

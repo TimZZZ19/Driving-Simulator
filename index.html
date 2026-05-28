@@ -1,698 +1,1115 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Driving Simulator</title>
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    background: #1a1a2e;
-    display: flex; flex-direction: column; align-items: center;
-    min-height: 100vh;
-    font-family: 'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
-    color: #e0e0e0; user-select: none;
-  }
-  h1 { margin: 18px 0 2px; font-size: 1.4rem; font-weight: 500; letter-spacing: 2px; color: #ccc; }
-  .subtitle { font-size: 0.78rem; color: #777; margin-bottom: 14px; }
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Driving Simulator</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        background: #1a1a2e;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-height: 100vh;
+        font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+        color: #e0e0e0;
+        user-select: none;
+      }
+      h1 {
+        margin: 18px 0 2px;
+        font-size: 1.4rem;
+        font-weight: 500;
+        letter-spacing: 2px;
+        color: #ccc;
+      }
+      .subtitle {
+        font-size: 0.78rem;
+        color: #777;
+        margin-bottom: 14px;
+      }
 
-  /* ── Config Panel ── */
-  #configPanel {
-    background: #16213e; border-radius: 12px; padding: 26px 40px;
-    display: flex; flex-direction: column; align-items: center; gap: 14px;
-    box-shadow: 0 4px 24px rgba(0,0,0,0.45);
-  }
-  .configRow { display: flex; align-items: center; gap: 14px; }
-  .configRow label { font-size: 0.9rem; color: #aaa; white-space: nowrap; }
-  .configRow input {
-    width: 80px; padding: 6px 10px; border: 1px solid #334; border-radius: 6px;
-    background: #0f3460; color: #fff; font-size: 1rem; text-align: center; outline: none;
-  }
-  .configRow input:focus { border-color: #4361ee; }
-  #startBtn {
-    padding: 10px 40px; border: none; border-radius: 8px;
-    background: #4361ee; color: #fff; font-size: 1rem; font-weight: 600;
-    cursor: pointer; transition: background 0.2s; margin-top: 8px;
-  }
-  #startBtn:hover { background: #3a56d4; }
+      /* ── Config Panel ── */
+      #configPanel {
+        background: #16213e;
+        border-radius: 12px;
+        padding: 26px 40px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 14px;
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
+      }
+      .configRow {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+      .configRow label {
+        font-size: 0.9rem;
+        color: #aaa;
+        white-space: nowrap;
+      }
+      .configRow input {
+        width: 80px;
+        padding: 6px 10px;
+        border: 1px solid #334;
+        border-radius: 6px;
+        background: #0f3460;
+        color: #fff;
+        font-size: 1rem;
+        text-align: center;
+        outline: none;
+      }
+      .configRow input:focus {
+        border-color: #4361ee;
+      }
+      #startBtn {
+        padding: 10px 40px;
+        border: none;
+        border-radius: 8px;
+        background: #4361ee;
+        color: #fff;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.2s;
+        margin-top: 8px;
+      }
+      #startBtn:hover {
+        background: #3a56d4;
+      }
 
-  /* ── Game Wrapper ── */
-  #gameWrapper {
-    position: relative; display: none;
-    border-radius: 10px 10px 0 0; overflow: hidden;
-    box-shadow: 0 4px 28px rgba(0,0,0,0.5);
-  }
-  canvas { display: block; }
+      /* ── Game Wrapper ── */
+      #gameWrapper {
+        position: relative;
+        display: none;
+        border-radius: 10px 10px 0 0;
+        overflow: hidden;
+        box-shadow: 0 4px 28px rgba(0, 0, 0, 0.5);
+      }
+      canvas {
+        display: block;
+      }
 
-  /* ── Chart Container ── */
-  #chartContainer {
-    display: none; position: relative;
-    width: 960px;
-    background: #fdfdfd; border-radius: 0 0 10px 10px;
-    box-shadow: 0 4px 28px rgba(0,0,0,0.5);
-    padding-bottom: 6px;
-  }
-  #chartCanvas { display: block; margin: 0 auto; cursor: crosshair; }
-  .chartLegend {
-    display: flex; justify-content: center; gap: 24px;
-    padding: 4px 0 6px; font-size: 0.72rem; color: #999;
-  }
-  .chartLegend span { display: flex; align-items: center; gap: 5px; }
-  .swatch { display: inline-block; width: 14px; height: 10px; border-radius: 2px; }
-  .swatch.area  { background: rgba(66,133,244,0.22); border: 1px solid rgba(66,133,244,0.5); }
-  .swatch.slope { background: transparent; border-bottom: 2px dashed #e63946; width: 20px; height: 0; }
-  #chartTooltip {
-    position: fixed; display: none; pointer-events: none;
-    background: rgba(0,0,0,0.78); color: #fff; padding: 5px 10px;
-    border-radius: 6px; font-size: 0.8rem; white-space: nowrap;
-    font-family: 'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
-    z-index: 100;
-  }
+      /* ── Chart Container ── */
+      #chartContainer {
+        display: none;
+        position: relative;
+        width: 960px;
+        background: #fdfdfd;
+        border-radius: 0 0 10px 10px;
+        box-shadow: 0 4px 28px rgba(0, 0, 0, 0.5);
+        padding-bottom: 6px;
+      }
+      #chartCanvas {
+        display: block;
+        margin: 0 auto;
+        cursor: crosshair;
+      }
+      .chartLegend {
+        display: flex;
+        justify-content: center;
+        gap: 24px;
+        padding: 4px 0 6px;
+        font-size: 0.72rem;
+        color: #999;
+      }
+      .chartLegend span {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .swatch {
+        display: inline-block;
+        width: 14px;
+        height: 10px;
+        border-radius: 2px;
+      }
+      .swatch.area {
+        background: rgba(66, 133, 244, 0.22);
+        border: 1px solid rgba(66, 133, 244, 0.5);
+      }
+      .swatch.area-neg {
+        background: rgba(230, 57, 70, 0.22);
+        border: 1px solid rgba(230, 57, 70, 0.5);
+      }
+      .swatch.slope {
+        background: transparent;
+        border-bottom: 2px dashed #e63946;
+        width: 20px;
+        height: 0;
+      }
+      #chartTooltip {
+        position: fixed;
+        display: none;
+        pointer-events: none;
+        background: rgba(0, 0, 0, 0.78);
+        color: #fff;
+        padding: 5px 10px;
+        border-radius: 6px;
+        font-size: 0.8rem;
+        white-space: nowrap;
+        font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+        z-index: 100;
+      }
 
-  /* ── Bottom Bar ── */
-  #bottomBar { display: none; align-items: center; gap: 28px; margin-top: 14px; }
-  .keyHint {
-    display: inline-block; background: #333; color: #eee;
-    padding: 3px 11px; border-radius: 4px; font-weight: 700; font-size: 0.85rem; margin: 0 3px;
-  }
-  .keyHint.brake  { border-bottom: 3px solid #e63946; }
-  .keyHint.accel  { border-bottom: 3px solid #22c55e; }
-  #statusText { font-size: 0.8rem; color: #666; }
-  #pauseBtn, #stopBtn {
-    padding: 7px 18px; border: 1px solid #555; border-radius: 6px;
-    background: transparent; color: #ccc; cursor: pointer; font-size: 0.85rem;
-    transition: all 0.2s;
-  }
-  #pauseBtn:hover { background: #2a3a2e; color: #fff; border-color: #22c55e; }
-  #stopBtn:hover { background: #3a1a1a; color: #fff; border-color: #e63946; }
-</style>
-</head>
-<body>
+      /* ── Bottom Bar ── */
+      #bottomBar {
+        display: none;
+        align-items: center;
+        gap: 28px;
+        margin-top: 14px;
+      }
+      .keyHint {
+        display: inline-block;
+        background: #333;
+        color: #eee;
+        padding: 3px 11px;
+        border-radius: 4px;
+        font-weight: 700;
+        font-size: 0.85rem;
+        margin: 0 3px;
+      }
+      .keyHint.brake {
+        border-bottom: 3px solid #e63946;
+      }
+      .keyHint.accel {
+        border-bottom: 3px solid #22c55e;
+      }
+      #statusText {
+        font-size: 0.8rem;
+        color: #666;
+      }
+      #pauseBtn,
+      #stopBtn {
+        padding: 7px 18px;
+        border: 1px solid #555;
+        border-radius: 6px;
+        background: transparent;
+        color: #ccc;
+        cursor: pointer;
+        font-size: 0.85rem;
+        transition: all 0.2s;
+      }
+      #pauseBtn:hover {
+        background: #2a3a2e;
+        color: #fff;
+        border-color: #22c55e;
+      }
+      #stopBtn:hover {
+        background: #3a1a1a;
+        color: #fff;
+        border-color: #e63946;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>DRIVING SIMULATOR</h1>
+    <p class="subtitle">Real-time Kinematics Demonstration</p>
 
-<h1>DRIVING SIMULATOR</h1>
-<p class="subtitle">Real-time Kinematics Demonstration</p>
+    <!-- ═══════════════ CONFIG ═══════════════ -->
+    <div id="configPanel">
+      <div class="configRow">
+        <label>Acceleration a<sub>accel</sub> (m/s²):</label>
+        <input
+          id="accelInput"
+          type="number"
+          value="2"
+          min="0.1"
+          max="20"
+          step="0.1"
+        />
+      </div>
+      <div class="configRow">
+        <label>Braking a<sub>brake</sub> (m/s²):</label>
+        <input
+          id="brakeInput"
+          type="number"
+          value="3"
+          min="0.1"
+          max="20"
+          step="0.1"
+        />
+      </div>
+      <button id="startBtn">Start Driving</button>
+    </div>
 
-<!-- ═══════════════ CONFIG ═══════════════ -->
-<div id="configPanel">
-  <div class="configRow">
-    <label>Acceleration a<sub>accel</sub> (m/s²):</label>
-    <input id="accelInput" type="number" value="2" min="0.1" max="20" step="0.1">
-  </div>
-  <div class="configRow">
-    <label>Braking a<sub>brake</sub> (m/s²):</label>
-    <input id="brakeInput" type="number" value="3" min="0.1" max="20" step="0.1">
-  </div>
-  <button id="startBtn">Start Driving</button>
-</div>
+    <!-- ═══════════════ GAME ═══════════════ -->
+    <div id="gameWrapper">
+      <canvas id="gameCanvas"></canvas>
+    </div>
 
-<!-- ═══════════════ GAME ═══════════════ -->
-<div id="gameWrapper">
-  <canvas id="gameCanvas"></canvas>
-</div>
+    <!-- ═══════════════ V-T GRAPH ═══════════════ -->
+    <div id="chartContainer">
+      <canvas id="chartCanvas"></canvas>
+      <div class="chartLegend">
+        <span
+          ><span class="swatch area"></span> Area (+) = Displacement
+          forward</span
+        >
+        <span
+          ><span class="swatch area-neg"></span> Area (−) = Displacement
+          backward</span
+        >
+        <span
+          ><span class="swatch slope"></span> Dashed red = Slope
+          (acceleration)</span
+        >
+      </div>
+    </div>
+    <div id="chartTooltip"></div>
 
-<!-- ═══════════════ V-T GRAPH ═══════════════ -->
-<div id="chartContainer">
-  <canvas id="chartCanvas"></canvas>
-  <div class="chartLegend">
-    <span><span class="swatch area"></span> Area under curve = Displacement (net)</span>
-    <span><span class="swatch slope"></span> Dashed red = Slope (acceleration)</span>
-  </div>
-</div>
-<div id="chartTooltip"></div>
+    <div id="bottomBar">
+      <span
+        >Controls: <span class="keyHint brake">J</span> Brake &nbsp;
+        <span class="keyHint accel">K</span> Accelerator</span
+      >
+      <button id="pauseBtn">⏸ Pause</button>
+      <button id="stopBtn">⏹ Stop</button>
+      <span id="statusText"></span>
+    </div>
 
-<div id="bottomBar">
-  <span>Controls: <span class="keyHint brake">J</span> Brake &nbsp; <span class="keyHint accel">K</span> Accelerator</span>
-  <button id="pauseBtn">⏸ Pause</button>
-  <button id="stopBtn">⏹ Stop</button>
-  <span id="statusText"></span>
-</div>
+    <!-- ═══════════════ SCRIPT ═══════════════ -->
+    <script>
+      // ──────────────────────────────────────────────
+      //  1. CONSTANTS & DOM REFS
+      // ──────────────────────────────────────────────
+      const W = 960,
+        H = 440;
+      const CAR_X = 200;
+      const ROAD_Y = 320;
+      const PX_PER_M = 120;
 
-<!-- ═══════════════ SCRIPT ═══════════════ -->
-<script>
-// ──────────────────────────────────────────────
-//  1. CONSTANTS & DOM REFS
-// ──────────────────────────────────────────────
-const W = 960, H = 440;
-const CAR_X = 200;
-const ROAD_Y = 320;
-const PX_PER_M = 120;
+      // game canvas
+      const canvas = document.getElementById("gameCanvas");
+      canvas.width = W;
+      canvas.height = H;
+      const ctx = canvas.getContext("2d");
 
-// game canvas
-const canvas = document.getElementById('gameCanvas');
-canvas.width  = W;
-canvas.height = H;
-const ctx = canvas.getContext('2d');
+      // chart canvas
+      const chartCanvas = document.getElementById("chartCanvas");
+      chartCanvas.width = 960;
+      chartCanvas.height = 340;
+      const cCtx = chartCanvas.getContext("2d");
+      const CW = chartCanvas.width,
+        CH = chartCanvas.height;
 
-// chart canvas
-const chartCanvas = document.getElementById('chartCanvas');
-chartCanvas.width  = 960;
-chartCanvas.height = 340;
-const cCtx = chartCanvas.getContext('2d');
-const CW = chartCanvas.width, CH = chartCanvas.height;
+      const $config = document.getElementById("configPanel");
+      const $wrapper = document.getElementById("gameWrapper");
+      const $chart = document.getElementById("chartContainer");
+      const $bottom = document.getElementById("bottomBar");
+      const $status = document.getElementById("statusText");
+      const $pauseBtn = document.getElementById("pauseBtn");
+      const $stopBtn = document.getElementById("stopBtn");
+      const $accelIn = document.getElementById("accelInput");
+      const $brakeIn = document.getElementById("brakeInput");
 
-const $config   = document.getElementById('configPanel');
-const $wrapper  = document.getElementById('gameWrapper');
-const $chart    = document.getElementById('chartContainer');
-const $bottom   = document.getElementById('bottomBar');
-const $status   = document.getElementById('statusText');
-const $pauseBtn = document.getElementById('pauseBtn');
-const $stopBtn  = document.getElementById('stopBtn');
-const $accelIn  = document.getElementById('accelInput');
-const $brakeIn  = document.getElementById('brakeInput');
+      // ──────────────────────────────────────────────
+      //  2. STATE
+      // ──────────────────────────────────────────────
+      let cfgAccel = 2;
+      let cfgBrake = 3;
+      let running = false;
+      let paused = false;
 
-// ──────────────────────────────────────────────
-//  2. STATE
-// ──────────────────────────────────────────────
-let cfgAccel = 2;
-let cfgBrake = 3;
-let running  = false;
-let paused   = false;
+      // physics
+      let t = 0,
+        v = 0,
+        s = 0,
+        a = 0;
+      let lastTime = 0;
 
-// physics
-let t = 0, v = 0, s = 0, a = 0;
-let lastTime = 0;
+      // input
+      const keys = {};
 
-// input
-const keys = {};
+      // scrolling background
+      let bgOffset = 0;
 
-// scrolling background
-let bgOffset = 0;
+      // v‑t data — sampled at ~10 Hz
+      let vtData = [];
+      let lastSample = 0;
 
-// v‑t data — sampled at ~10 Hz
-let vtData = [];
-let lastSample = 0;
+      // ──────────────────────────────────────────────
+      //  3. SCENERY (pre‑generated)
+      // ──────────────────────────────────────────────
+      let mountains = [],
+        trees = [],
+        buildings = [];
+      (function generateScenery() {
+        for (let i = 0; i < 30; i++)
+          mountains.push({
+            x: i * 180 + Math.random() * 120,
+            h: 40 + Math.random() * 80,
+            w: 80 + Math.random() * 140,
+          });
+        for (let i = 0; i < 60; i++)
+          trees.push({
+            x: i * 90 + Math.random() * 70,
+            h: 25 + Math.random() * 45,
+            s: 0.6 + Math.random() * 0.8,
+          });
+        for (let i = 0; i < 25; i++)
+          buildings.push({
+            x: i * 220 + Math.random() * 160,
+            w: 30 + Math.random() * 50,
+            h: 50 + Math.random() * 90,
+          });
+      })();
 
-// ──────────────────────────────────────────────
-//  3. SCENERY (pre‑generated)
-// ──────────────────────────────────────────────
-let mountains = [], trees = [], buildings = [];
-(function generateScenery() {
-  for (let i = 0; i < 30; i++)
-    mountains.push({ x: i * 180 + Math.random() * 120, h: 40 + Math.random() * 80, w: 80 + Math.random() * 140 });
-  for (let i = 0; i < 60; i++)
-    trees.push({ x: i * 90 + Math.random() * 70, h: 25 + Math.random() * 45, s: 0.6 + Math.random() * 0.8 });
-  for (let i = 0; i < 25; i++)
-    buildings.push({ x: i * 220 + Math.random() * 160, w: 30 + Math.random() * 50, h: 50 + Math.random() * 90 });
-})();
+      // ──────────────────────────────────────────────
+      //  4. GAME DRAWING HELPERS
+      // ──────────────────────────────────────────────
+      function rrect(context, x, y, w, h, r) {
+        context.beginPath();
+        context.moveTo(x + r, y);
+        context.lineTo(x + w - r, y);
+        context.arcTo(x + w, y, x + w, y + r, r);
+        context.lineTo(x + w, y + h - r);
+        context.arcTo(x + w, y + h, x + w - r, y + h, r);
+        context.lineTo(x + r, y + h);
+        context.arcTo(x, y + h, x, y + h - r, r);
+        context.lineTo(x, y + r);
+        context.arcTo(x, y, x + r, y, r);
+        context.closePath();
+      }
 
-// ──────────────────────────────────────────────
-//  4. GAME DRAWING HELPERS
-// ──────────────────────────────────────────────
-function rrect(context, x, y, w, h, r) {
-  context.beginPath();
-  context.moveTo(x + r, y);
-  context.lineTo(x + w - r, y); context.arcTo(x + w, y, x + w, y + r, r);
-  context.lineTo(x + w, y + h - r); context.arcTo(x + w, y + h, x + w - r, y + h, r);
-  context.lineTo(x + r, y + h); context.arcTo(x, y + h, x, y + h - r, r);
-  context.lineTo(x, y + r); context.arcTo(x, y, x + r, y, r);
-  context.closePath();
-}
+      function drawSky() {
+        const g = ctx.createLinearGradient(0, 0, 0, ROAD_Y);
+        g.addColorStop(0, "#4a90d9");
+        g.addColorStop(0.55, "#87ceeb");
+        g.addColorStop(1, "#c5e3f6");
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, W, ROAD_Y);
+      }
 
-function drawSky() {
-  const g = ctx.createLinearGradient(0, 0, 0, ROAD_Y);
-  g.addColorStop(0, '#4a90d9'); g.addColorStop(0.55, '#87ceeb'); g.addColorStop(1, '#c5e3f6');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, ROAD_Y);
-}
+      function scrollX(baseX, offset, rate, wrap) {
+        return ((((baseX - offset * rate) % wrap) + wrap) % wrap) - 200;
+      }
 
-function scrollX(baseX, offset, rate, wrap) {
-  return ((baseX - offset * rate) % wrap + wrap) % wrap - 200;
-}
+      function drawScenery(offset) {
+        ctx.fillStyle = "#5b8c5a";
+        mountains.forEach((m) => {
+          const x = scrollX(m.x, offset, 0.6, 3600);
+          if (x < -200 || x > W + 200) return;
+          ctx.beginPath();
+          ctx.moveTo(x, ROAD_Y);
+          ctx.lineTo(x + m.w / 2, ROAD_Y - m.h);
+          ctx.lineTo(x + m.w, ROAD_Y);
+          ctx.closePath();
+          ctx.fill();
+        });
+        trees.forEach((t) => {
+          const x = scrollX(t.x, offset, 0.95, 5400);
+          if (x < -80 || x > W + 80) return;
+          ctx.fillStyle = "#8B6914";
+          ctx.fillRect(x - 2, ROAD_Y - t.h * 0.65, 5, t.h * 0.65);
+          ctx.fillStyle = "#3a7d3a";
+          ctx.beginPath();
+          ctx.arc(x + 0.5, ROAD_Y - t.h * 0.7, t.h * 0.33, 0, Math.PI * 2);
+          ctx.fill();
+        });
+        buildings.forEach((b) => {
+          const x = scrollX(b.x, offset, 0.5, 6000);
+          if (x < -100 || x > W + 100) return;
+          ctx.fillStyle = "#c4a882";
+          ctx.fillRect(x, ROAD_Y - b.h, b.w, b.h);
+          ctx.fillStyle = "#7a9eb1";
+          for (let wy = ROAD_Y - b.h + 8; wy < ROAD_Y - 6; wy += 18)
+            for (let wx = x + 5; wx < x + b.w - 5; wx += 14)
+              ctx.fillRect(wx, wy, 8, 10);
+        });
+      }
 
-function drawScenery(offset) {
-  ctx.fillStyle = '#5b8c5a';
-  mountains.forEach(m => {
-    const x = scrollX(m.x, offset, 0.6, 3600);
-    if (x < -200 || x > W + 200) return;
-    ctx.beginPath();
-    ctx.moveTo(x, ROAD_Y); ctx.lineTo(x + m.w / 2, ROAD_Y - m.h); ctx.lineTo(x + m.w, ROAD_Y);
-    ctx.closePath(); ctx.fill();
-  });
-  trees.forEach(t => {
-    const x = scrollX(t.x, offset, 0.95, 5400);
-    if (x < -80 || x > W + 80) return;
-    ctx.fillStyle = '#8B6914';
-    ctx.fillRect(x - 2, ROAD_Y - t.h * 0.65, 5, t.h * 0.65);
-    ctx.fillStyle = '#3a7d3a';
-    ctx.beginPath(); ctx.arc(x + 0.5, ROAD_Y - t.h * 0.7, t.h * 0.33, 0, Math.PI * 2); ctx.fill();
-  });
-  buildings.forEach(b => {
-    const x = scrollX(b.x, offset, 0.5, 6000);
-    if (x < -100 || x > W + 100) return;
-    ctx.fillStyle = '#c4a882';
-    ctx.fillRect(x, ROAD_Y - b.h, b.w, b.h);
-    ctx.fillStyle = '#7a9eb1';
-    for (let wy = ROAD_Y - b.h + 8; wy < ROAD_Y - 6; wy += 18)
-      for (let wx = x + 5; wx < x + b.w - 5; wx += 14)
-        ctx.fillRect(wx, wy, 8, 10);
-  });
-}
+      function drawRoad(offset) {
+        const off = ((offset % 120) + 120) % 120;
+        ctx.fillStyle = "#3d3d3d";
+        ctx.fillRect(0, ROAD_Y, W, H - ROAD_Y);
+        ctx.fillStyle = "#555";
+        ctx.fillRect(0, ROAD_Y, W, 4);
+        ctx.fillStyle = "#fff";
+        for (let x = -off; x < W; x += 60)
+          ctx.fillRect(x, ROAD_Y + 60 - 1.5, 30, 3);
+      }
 
-function drawRoad(offset) {
-  const off = (offset % 120 + 120) % 120;
-  ctx.fillStyle = '#3d3d3d';
-  ctx.fillRect(0, ROAD_Y, W, H - ROAD_Y);
-  ctx.fillStyle = '#555';
-  ctx.fillRect(0, ROAD_Y, W, 4);
-  ctx.fillStyle = '#fff';
-  for (let x = -off; x < W; x += 60) ctx.fillRect(x, ROAD_Y + 60 - 1.5, 30, 3);
-}
+      function drawCar(displacement) {
+        const cx = CAR_X,
+          cy = ROAD_Y - 8;
+        const wR = 14,
+          wb = 70;
+        const angle = displacement / (wR / 100);
 
-function drawCar(displacement) {
-  const cx = CAR_X, cy = ROAD_Y - 8;
-  const wR = 14, wb = 70;
-  const angle = displacement / (wR / 100);
+        if (v < 0) {
+          ctx.save();
+          ctx.translate(cx, 0);
+          ctx.scale(-1, 1);
+          ctx.translate(-cx, 0);
+        }
 
-  if (v < 0) {
-    ctx.save();
-    ctx.translate(cx, 0);
-    ctx.scale(-1, 1);
-    ctx.translate(-cx, 0);
-  }
+        ctx.fillStyle = "rgba(0,0,0,0.18)";
+        ctx.beginPath();
+        ctx.ellipse(cx + 2, cy + wR + 4, 56, 8, 0, 0, Math.PI * 2);
+        ctx.fill();
 
-  ctx.fillStyle = 'rgba(0,0,0,0.18)';
-  ctx.beginPath(); ctx.ellipse(cx + 2, cy + wR + 4, 56, 8, 0, 0, Math.PI * 2); ctx.fill();
+        [cx - wb / 2, cx + wb / 2].forEach((wx) => {
+          ctx.save();
+          ctx.translate(wx, cy + wR);
+          ctx.rotate(angle);
+          ctx.fillStyle = "#222";
+          ctx.beginPath();
+          ctx.arc(0, 0, wR, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "#888";
+          ctx.beginPath();
+          ctx.arc(0, 0, wR * 0.55, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = "#555";
+          ctx.lineWidth = 2;
+          for (let i = 0; i < 5; i++) {
+            const sa = (i / 5) * Math.PI * 2;
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(Math.cos(sa) * wR * 0.5, Math.sin(sa) * wR * 0.5);
+            ctx.stroke();
+          }
+          ctx.fillStyle = "#ccc";
+          ctx.beginPath();
+          ctx.arc(0, 0, wR * 0.18, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        });
 
-  [cx - wb / 2, cx + wb / 2].forEach(wx => {
-    ctx.save();
-    ctx.translate(wx, cy + wR);
-    ctx.rotate(angle);
-    ctx.fillStyle = '#222'; ctx.beginPath(); ctx.arc(0, 0, wR, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#888'; ctx.beginPath(); ctx.arc(0, 0, wR * 0.55, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = '#555'; ctx.lineWidth = 2;
-    for (let i = 0; i < 5; i++) {
-      const sa = (i / 5) * Math.PI * 2;
-      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(sa) * wR * 0.5, Math.sin(sa) * wR * 0.5); ctx.stroke();
-    }
-    ctx.fillStyle = '#ccc'; ctx.beginPath(); ctx.arc(0, 0, wR * 0.18, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
-  });
+        const bx = cx - 58,
+          by = cy - 18,
+          bw = 116,
+          bh = 26;
+        ctx.fillStyle = "#d4343e";
+        ctx.beginPath();
+        ctx.moveTo(bx + 8, by + bh);
+        ctx.lineTo(bx + 4, by + bh * 0.55);
+        ctx.quadraticCurveTo(bx, by + 2, bx + 14, by);
+        ctx.lineTo(bx + bw - 14, by);
+        ctx.quadraticCurveTo(bx + bw, by + 4, bx + bw + 2, by + bh * 0.6);
+        ctx.lineTo(bx + bw - 8, by + bh);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = "#a02030";
+        ctx.lineWidth = 2;
+        ctx.stroke();
 
-  const bx = cx - 58, by = cy - 18, bw = 116, bh = 26;
-  ctx.fillStyle = '#d4343e';
-  ctx.beginPath();
-  ctx.moveTo(bx + 8, by + bh); ctx.lineTo(bx + 4, by + bh * 0.55);
-  ctx.quadraticCurveTo(bx, by + 2, bx + 14, by);
-  ctx.lineTo(bx + bw - 14, by);
-  ctx.quadraticCurveTo(bx + bw, by + 4, bx + bw + 2, by + bh * 0.6);
-  ctx.lineTo(bx + bw - 8, by + bh);
-  ctx.closePath(); ctx.fill();
-  ctx.strokeStyle = '#a02030'; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = "#c0303a";
+        ctx.beginPath();
+        ctx.moveTo(bx + 30, by);
+        ctx.lineTo(bx + 26, by - 16);
+        ctx.quadraticCurveTo(bx + 40, by - 22, bx + 58, by - 20);
+        ctx.lineTo(bx + 82, by - 20);
+        ctx.quadraticCurveTo(bx + 94, by - 18, bx + 92, by - 6);
+        ctx.lineTo(bx + 88, by);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
 
-  ctx.fillStyle = '#c0303a';
-  ctx.beginPath();
-  ctx.moveTo(bx + 30, by); ctx.lineTo(bx + 26, by - 16);
-  ctx.quadraticCurveTo(bx + 40, by - 22, bx + 58, by - 20);
-  ctx.lineTo(bx + 82, by - 20);
-  ctx.quadraticCurveTo(bx + 94, by - 18, bx + 92, by - 6);
-  ctx.lineTo(bx + 88, by);
-  ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = "#a8d8ea";
+        [
+          { x: 38, w: 18 },
+          { x: 64, w: 22 },
+        ].forEach((w) => {
+          ctx.beginPath();
+          ctx.moveTo(bx + w.x, by - 2);
+          ctx.lineTo(bx + w.x, by - 14);
+          ctx.lineTo(bx + w.x + w.w, by - 14);
+          ctx.lineTo(bx + w.x + w.w, by - 2);
+          ctx.closePath();
+          ctx.fill();
+          ctx.strokeStyle = "#a02030";
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        });
+        ctx.fillStyle = "#ffe066";
+        ctx.beginPath();
+        ctx.arc(bx + bw - 6, by + bh * 0.5, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#ff3333";
+        ctx.fillRect(bx - 2, by + bh * 0.3, 5, 8);
 
-  ctx.fillStyle = '#a8d8ea';
-  [{ x: 38, w: 18 }, { x: 64, w: 22 }].forEach(w => {
-    ctx.beginPath();
-    ctx.moveTo(bx + w.x, by - 2); ctx.lineTo(bx + w.x, by - 14);
-    ctx.lineTo(bx + w.x + w.w, by - 14); ctx.lineTo(bx + w.x + w.w, by - 2);
-    ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = '#a02030'; ctx.lineWidth = 1; ctx.stroke();
-  });
-  ctx.fillStyle = '#ffe066'; ctx.beginPath(); ctx.arc(bx + bw - 6, by + bh * 0.5, 5, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#ff3333'; ctx.fillRect(bx - 2, by + bh * 0.3, 5, 8);
+        if (v < 0) {
+          ctx.restore();
+        }
+      }
 
-  if (v < 0) { ctx.restore(); }
-}
+      function drawHUD() {
+        const hx = W - 210,
+          hy = 16;
+        ctx.fillStyle = "rgba(0,0,0,0.65)";
+        rrect(ctx, hx, hy, 194, 124, 10);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255,255,255,0.12)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
 
-function drawHUD() {
-  const hx = W - 210, hy = 16;
-  ctx.fillStyle = 'rgba(0,0,0,0.65)'; rrect(ctx, hx, hy, 194, 124, 10); ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth = 1; ctx.stroke();
+        const rows = [
+          {
+            lbl: "Speed v",
+            val: v.toFixed(1),
+            unit: "m/s",
+            clr: v < 0 ? "#ef5350" : "#4fc3f7",
+          },
+          { lbl: "Time t", val: t.toFixed(1), unit: "s", clr: "#fff" },
+          {
+            lbl: "Displacement s",
+            val: Math.round(s),
+            unit: "m",
+            clr: s < 0 ? "#ef5350" : "#81c784",
+          },
+          {
+            lbl: "Acceleration a",
+            val: a.toFixed(1),
+            unit: "m/s²",
+            clr: a >= 0 ? "#ffb74d" : "#ef5350",
+          },
+        ];
+        ctx.textBaseline = "middle";
+        rows.forEach((r, i) => {
+          const y = hy + 12 + i * 28;
+          ctx.fillStyle = "#999";
+          ctx.font =
+            '12px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+          ctx.textAlign = "left";
+          ctx.fillText(r.lbl, hx + 14, y);
+          ctx.fillStyle = r.clr;
+          ctx.font =
+            'bold 17px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+          ctx.textAlign = "right";
+          ctx.fillText(r.val, hx + 140, y);
+          ctx.fillStyle = "#777";
+          ctx.font =
+            '11px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+          ctx.fillText(r.unit, hx + 178, y);
+        });
+      }
 
-  const rows = [
-    { lbl: 'Speed v',       val: v.toFixed(1),  unit: 'm/s',   clr: v < 0 ? '#ef5350' : '#4fc3f7' },
-    { lbl: 'Time t',        val: t.toFixed(1),  unit: 's',     clr: '#fff' },
-    { lbl: 'Displacement s',val: Math.round(s),  unit: 'm',     clr: s < 0 ? '#ef5350' : '#81c784' },
-    { lbl: 'Acceleration a',val: a.toFixed(1),  unit: 'm/s²',  clr: a >= 0 ? '#ffb74d' : '#ef5350' },
-  ];
-  ctx.textBaseline = 'middle';
-  rows.forEach((r, i) => {
-    const y = hy + 12 + i * 28;
-    ctx.fillStyle = '#999'; ctx.font = '12px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
-    ctx.textAlign = 'left';  ctx.fillText(r.lbl, hx + 14, y);
-    ctx.fillStyle = r.clr;   ctx.font = 'bold 17px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
-    ctx.textAlign = 'right'; ctx.fillText(r.val, hx + 140, y);
-    ctx.fillStyle = '#777';  ctx.font = '11px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
-    ctx.fillText(r.unit, hx + 178, y);
-  });
-}
+      function drawPedals() {
+        const px = 20,
+          py = H - 80;
+        ctx.fillStyle = "rgba(0,0,0,0.5)";
+        rrect(ctx, px, py, 56, 68, 8);
+        ctx.fill();
+        ctx.fillStyle = keys["j"] ? "#e63946" : "#444";
+        ctx.fillRect(px + 8, py + 10, 16, 22);
+        ctx.fillStyle = "#ccc";
+        ctx.font =
+          'bold 10px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+        ctx.textAlign = "center";
+        ctx.fillText("J", px + 16, py + 26);
+        ctx.fillStyle = "#999";
+        ctx.font = '8px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+        ctx.fillText("Brake", px + 16, py + 40);
+        ctx.fillStyle = keys["k"] ? "#22c55e" : "#444";
+        ctx.fillRect(px + 30, py + 10, 16, 22);
+        ctx.fillStyle = "#ccc";
+        ctx.font =
+          'bold 10px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+        ctx.fillText("K", px + 38, py + 26);
+        ctx.fillStyle = "#999";
+        ctx.font = '8px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+        ctx.fillText("Accel", px + 38, py + 40);
+      }
 
-function drawPedals() {
-  const px = 20, py = H - 80;
-  ctx.fillStyle = 'rgba(0,0,0,0.5)'; rrect(ctx, px, py, 56, 68, 8); ctx.fill();
-  ctx.fillStyle = keys['j'] ? '#e63946' : '#444';
-  ctx.fillRect(px + 8,  py + 10, 16, 22);
-  ctx.fillStyle = '#ccc'; ctx.font = 'bold 10px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
-  ctx.textAlign = 'center'; ctx.fillText('J', px + 16, py + 26);
-  ctx.fillStyle = '#999'; ctx.font = '8px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
-  ctx.fillText('Brake', px + 16, py + 40);
-  ctx.fillStyle = keys['k'] ? '#22c55e' : '#444';
-  ctx.fillRect(px + 30, py + 10, 16, 22);
-  ctx.fillStyle = '#ccc'; ctx.font = 'bold 10px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
-  ctx.fillText('K', px + 38, py + 26);
-  ctx.fillStyle = '#999'; ctx.font = '8px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
-  ctx.fillText('Accel', px + 38, py + 40);
-}
+      // ──────────────────────────────────────────────
+      //  5. GAME RENDER FRAME
+      // ──────────────────────────────────────────────
+      function renderGame() {
+        ctx.clearRect(0, 0, W, H);
+        drawSky();
+        drawScenery(bgOffset);
+        drawRoad(bgOffset);
+        drawCar(s);
+        drawHUD();
+        drawPedals();
+      }
 
-// ──────────────────────────────────────────────
-//  5. GAME RENDER FRAME
-// ──────────────────────────────────────────────
-function renderGame() {
-  ctx.clearRect(0, 0, W, H);
-  drawSky();
-  drawScenery(bgOffset);
-  drawRoad(bgOffset);
-  drawCar(s);
-  drawHUD();
-  drawPedals();
-}
+      // ──────────────────────────────────────────────
+      //  6. PHYSICS
+      // ──────────────────────────────────────────────
+      function updatePhysics(dt) {
+        if (keys["k"]) a = cfgAccel;
+        else if (keys["j"]) a = -cfgBrake;
+        else a = 0;
 
-// ──────────────────────────────────────────────
-//  6. PHYSICS
-// ──────────────────────────────────────────────
-function updatePhysics(dt) {
-  if (keys['k'])      a =  cfgAccel;
-  else if (keys['j']) a = -cfgBrake;
-  else                a =  0;
+        const v0 = v;
+        v += a * dt;
+        s += ((v0 + v) / 2) * dt;
+        t += dt;
+        bgOffset += v * PX_PER_M * dt;
+      }
 
-  const v0 = v;
-  v += a * dt;
-  s += (v0 + v) / 2 * dt;
-  t += dt;
-  bgOffset += v * PX_PER_M * dt;
-}
+      // ──────────────────────────────────────────────
+      //  7. V‑T GRAPH DRAWING
+      // ──────────────────────────────────────────────
+      const CPAD = { top: 22, right: 40, bottom: 40, left: 54 };
+      const CPW = CW - CPAD.left - CPAD.right;
+      const CPH = CH - CPAD.top - CPAD.bottom;
 
-// ──────────────────────────────────────────────
-//  7. V‑T GRAPH DRAWING
-// ──────────────────────────────────────────────
-const CPAD = { top: 22, right: 40, bottom: 40, left: 54 };
-const CPW = CW - CPAD.left - CPAD.right;
-const CPH = CH - CPAD.top - CPAD.bottom;
+      function ctx_t(tVal, tMin, tMax) {
+        return CPAD.left + ((tVal - tMin) / (tMax - tMin)) * CPW;
+      }
+      function ctx_v(vVal, vMin, vMax) {
+        return CPAD.top + CPH - ((vVal - vMin) / (vMax - vMin)) * CPH;
+      }
 
-function ctx_t(tVal, tMin, tMax) {
-  return CPAD.left + (tVal - tMin) / (tMax - tMin) * CPW;
-}
-function ctx_v(vVal, vMin, vMax) {
-  return CPAD.top + CPH - (vVal - vMin) / (vMax - vMin) * CPH;
-}
+      function niceStep(range, targetTicks) {
+        const raw = range / targetTicks;
+        const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+        const residual = raw / mag;
+        return (
+          (residual <= 1.5 ? 1 : residual <= 3 ? 2 : residual <= 7 ? 5 : 10) *
+          mag
+        );
+      }
 
-function niceStep(range, targetTicks) {
-  const raw = range / targetTicks;
-  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
-  const residual = raw / mag;
-  return (residual <= 1.5 ? 1 : residual <= 3 ? 2 : residual <= 7 ? 5 : 10) * mag;
-}
+      function computeSignedAreas() {
+        let pos = 0,
+          neg = 0;
+        for (let i = 1; i < vtData.length; i++) {
+          const v1 = vtData[i - 1].v,
+            v2 = vtData[i].v;
+          const dt = vtData[i].t - vtData[i - 1].t;
+          if (v1 >= 0 && v2 >= 0) {
+            pos += ((v1 + v2) / 2) * dt;
+          } else if (v1 < 0 && v2 < 0) {
+            neg += ((v1 + v2) / 2) * dt;
+          } else {
+            const frac = Math.abs(v1) / (Math.abs(v1) + Math.abs(v2));
+            const vt = vtData[i - 1].t + frac * dt;
+            if (v1 >= 0) {
+              pos += (v1 / 2) * (vt - vtData[i - 1].t);
+              neg += (v2 / 2) * (vtData[i].t - vt);
+            } else {
+              neg += (v1 / 2) * (vt - vtData[i - 1].t);
+              pos += (v2 / 2) * (vtData[i].t - vt);
+            }
+          }
+        }
+        return { pos, neg, net: pos + neg };
+      }
 
-function computeArea() {
-  let area = 0;
-  for (let i = 1; i < vtData.length; i++)
-    area += (vtData[i - 1].v + vtData[i].v) / 2 * (vtData[i].t - vtData[i - 1].t);
-  return area;
-}
+      function drawChart() {
+        cCtx.clearRect(0, 0, CW, CH);
 
-function drawChart() {
-  cCtx.clearRect(0, 0, CW, CH);
+        // auto-scale
+        let tMin = 0,
+          tMax = 10,
+          vMin = -5,
+          vMax = 5;
+        if (vtData.length > 0) {
+          tMax = Math.max(vtData[vtData.length - 1].t + 1, 8);
+          const allV = vtData.map((d) => d.v);
+          vMax = Math.max(2, ...allV) * 1.2;
+          vMin = Math.min(-2, ...allV) * 1.2;
+          if (vMin > 0) vMin = 0;
+          if (vMax < 0) vMax = 0;
+        }
+        const vRange = vMax - vMin;
 
-  // auto-scale
-  let tMin = 0, tMax = 10, vMin = -5, vMax = 5;
-  if (vtData.length > 0) {
-    tMax = Math.max(vtData[vtData.length - 1].t + 1, 8);
-    const allV = vtData.map(d => d.v);
-    vMax = Math.max(2, ...allV) * 1.2;
-    vMin = Math.min(-2, ...allV) * 1.2;
-    if (vMin > 0) vMin = 0;
-    if (vMax < 0) vMax = 0;
-  }
-  const vRange = vMax - vMin;
+        // grid
+        const tNice = niceStep(tMax - tMin, 5);
+        const vNice = niceStep(vRange, 5);
+        cCtx.strokeStyle = "#ececec";
+        cCtx.lineWidth = 0.5;
+        for (let ti = 0; ti <= tMax + tNice; ti += tNice) {
+          cCtx.beginPath();
+          cCtx.moveTo(ctx_t(ti, tMin, tMax), CPAD.top);
+          cCtx.lineTo(ctx_t(ti, tMin, tMax), CPAD.top + CPH);
+          cCtx.stroke();
+        }
+        for (
+          let vi = vMin - (vMin % vNice || 0);
+          vi <= vMax + vNice;
+          vi += vNice
+        ) {
+          cCtx.beginPath();
+          cCtx.moveTo(CPAD.left, ctx_v(vi, vMin, vMax));
+          cCtx.lineTo(CPAD.left + CPW, ctx_v(vi, vMin, vMax));
+          cCtx.stroke();
+        }
 
-  // grid
-  const tNice = niceStep(tMax - tMin, 5);
-  const vNice = niceStep(vRange, 5);
-  cCtx.strokeStyle = '#ececec'; cCtx.lineWidth = 0.5;
-  for (let ti = 0; ti <= tMax + tNice; ti += tNice) {
-    cCtx.beginPath(); cCtx.moveTo(ctx_t(ti, tMin, tMax), CPAD.top);
-    cCtx.lineTo(ctx_t(ti, tMin, tMax), CPAD.top + CPH); cCtx.stroke();
-  }
-  for (let vi = vMin - (vMin % vNice || 0); vi <= vMax + vNice; vi += vNice) {
-    cCtx.beginPath(); cCtx.moveTo(CPAD.left, ctx_v(vi, vMin, vMax));
-    cCtx.lineTo(CPAD.left + CPW, ctx_v(vi, vMin, vMax)); cCtx.stroke();
-  }
+        // axes — t-axis at v=0
+        const yZero = ctx_v(0, vMin, vMax);
+        const axisY = Math.max(CPAD.top, Math.min(CPAD.top + CPH, yZero));
+        cCtx.strokeStyle = "#333";
+        cCtx.lineWidth = 1.5;
+        cCtx.beginPath();
+        cCtx.moveTo(CPAD.left, CPAD.top);
+        cCtx.lineTo(CPAD.left, CPAD.top + CPH);
+        cCtx.stroke();
+        cCtx.beginPath();
+        cCtx.moveTo(CPAD.left, axisY);
+        cCtx.lineTo(CPAD.left + CPW, axisY);
+        cCtx.stroke();
+        // arrowheads
+        cCtx.fillStyle = "#333";
+        cCtx.beginPath();
+        cCtx.moveTo(CPAD.left, CPAD.top - 6);
+        cCtx.lineTo(CPAD.left - 4, CPAD.top + 2);
+        cCtx.lineTo(CPAD.left + 4, CPAD.top + 2);
+        cCtx.fill();
+        cCtx.beginPath();
+        cCtx.moveTo(CPAD.left + CPW + 6, axisY);
+        cCtx.lineTo(CPAD.left + CPW - 2, axisY - 4);
+        cCtx.lineTo(CPAD.left + CPW - 2, axisY + 4);
+        cCtx.fill();
 
-  // axes — t-axis at v=0
-  const yZero = ctx_v(0, vMin, vMax);
-  const axisY = Math.max(CPAD.top, Math.min(CPAD.top + CPH, yZero));
-  cCtx.strokeStyle = '#333'; cCtx.lineWidth = 1.5;
-  cCtx.beginPath(); cCtx.moveTo(CPAD.left, CPAD.top); cCtx.lineTo(CPAD.left, CPAD.top + CPH); cCtx.stroke();
-  cCtx.beginPath(); cCtx.moveTo(CPAD.left, axisY); cCtx.lineTo(CPAD.left + CPW, axisY); cCtx.stroke();
-  // arrowheads
-  cCtx.fillStyle = '#333';
-  cCtx.beginPath(); cCtx.moveTo(CPAD.left, CPAD.top - 6); cCtx.lineTo(CPAD.left - 4, CPAD.top + 2); cCtx.lineTo(CPAD.left + 4, CPAD.top + 2); cCtx.fill();
-  cCtx.beginPath(); cCtx.moveTo(CPAD.left + CPW + 6, axisY); cCtx.lineTo(CPAD.left + CPW - 2, axisY - 4); cCtx.lineTo(CPAD.left + CPW - 2, axisY + 4); cCtx.fill();
+        // tick labels
+        cCtx.fillStyle = "#666";
+        cCtx.font =
+          '10px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+        cCtx.textAlign = "center";
+        for (let ti = 0; ti <= tMax + tNice; ti += tNice)
+          if (ti >= tMin) cCtx.fillText(ti, ctx_t(ti, tMin, tMax), axisY + 14);
+        cCtx.textAlign = "right";
+        for (
+          let vi = vMin - (vMin % vNice || 0);
+          vi <= vMax + vNice;
+          vi += vNice
+        ) {
+          if (Math.abs(vi) < vNice * 0.01) continue;
+          cCtx.fillText(
+            vi % 1 === 0 ? vi : vi.toFixed(1),
+            CPAD.left - 6,
+            ctx_v(vi, vMin, vMax) + 4
+          );
+        }
+        if (vMin <= 0 && vMax >= 0)
+          cCtx.fillText("0", CPAD.left - 6, yZero + 4);
 
-  // tick labels
-  cCtx.fillStyle = '#666'; cCtx.font = '10px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
-  cCtx.textAlign = 'center';
-  for (let ti = 0; ti <= tMax + tNice; ti += tNice)
-    if (ti >= tMin) cCtx.fillText(ti, ctx_t(ti, tMin, tMax), axisY + 14);
-  cCtx.textAlign = 'right';
-  for (let vi = vMin - (vMin % vNice || 0); vi <= vMax + vNice; vi += vNice) {
-    if (Math.abs(vi) < vNice * 0.01) continue;
-    cCtx.fillText(vi % 1 === 0 ? vi : vi.toFixed(1), CPAD.left - 6, ctx_v(vi, vMin, vMax) + 4);
-  }
-  if (vMin <= 0 && vMax >= 0) cCtx.fillText('0', CPAD.left - 6, yZero + 4);
+        // axis titles
+        cCtx.fillStyle = "#333";
+        cCtx.font =
+          '11px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+        cCtx.textAlign = "center";
+        cCtx.fillText("t / s", CW / 2, CH - 4);
+        cCtx.save();
+        cCtx.translate(12, CPAD.top + CPH / 2);
+        cCtx.rotate(-Math.PI / 2);
+        cCtx.textAlign = "center";
+        cCtx.fillText("v / (m·s⁻¹)", 0, 0);
+        cCtx.restore();
 
-  // axis titles
-  cCtx.fillStyle = '#333'; cCtx.font = '11px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
-  cCtx.textAlign = 'center'; cCtx.fillText('t / s', CW / 2, CH - 4);
-  cCtx.save();
-  cCtx.translate(12, CPAD.top + CPH / 2); cCtx.rotate(-Math.PI / 2);
-  cCtx.textAlign = 'center'; cCtx.fillText('v / (m·s⁻¹)', 0, 0);
-  cCtx.restore();
+        if (vtData.length < 2) {
+          cCtx.fillStyle = "#999";
+          cCtx.font =
+            '15px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+          cCtx.textAlign = "center";
+          cCtx.fillText("Waiting for data…", CW / 2, CPAD.top + CPH / 2);
+          return;
+        }
 
-  if (vtData.length < 2) {
-    cCtx.fillStyle = '#999'; cCtx.font = '15px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
-    cCtx.textAlign = 'center'; cCtx.fillText('Waiting for data…', CW / 2, CPAD.top + CPH / 2);
-    return;
-  }
+        // area fill between curve and t-axis — positive blue, negative red
+        function fillSignedArea(positive) {
+          cCtx.beginPath();
+          let started = false;
+          for (let i = 0; i < vtData.length; i++) {
+            const x = ctx_t(vtData[i].t, tMin, tMax);
+            const y = ctx_v(vtData[i].v, vMin, vMax);
+            const matches = positive ? vtData[i].v >= 0 : vtData[i].v < 0;
+            if (matches) {
+              if (!started) {
+                if (i > 0) {
+                  const pv = vtData[i - 1].v,
+                    cv = vtData[i].v;
+                  const frac = Math.abs(pv) / (Math.abs(pv) + Math.abs(cv));
+                  const ct =
+                    vtData[i - 1].t + frac * (vtData[i].t - vtData[i - 1].t);
+                  cCtx.moveTo(ctx_t(ct, tMin, tMax), yZero);
+                } else {
+                  cCtx.moveTo(x, yZero);
+                }
+                cCtx.lineTo(x, y);
+                started = true;
+              } else {
+                cCtx.lineTo(x, y);
+              }
+            } else {
+              if (started) {
+                const pv = vtData[i - 1].v,
+                  cv = vtData[i].v;
+                const frac = Math.abs(pv) / (Math.abs(pv) + Math.abs(cv));
+                const ct =
+                  vtData[i - 1].t + frac * (vtData[i].t - vtData[i - 1].t);
+                cCtx.lineTo(ctx_t(ct, tMin, tMax), yZero);
+                cCtx.closePath();
+                cCtx.fill();
+                started = false;
+              }
+            }
+          }
+          if (started) {
+            const last = vtData[vtData.length - 1];
+            cCtx.lineTo(ctx_t(last.t, tMin, tMax), yZero);
+            cCtx.closePath();
+            cCtx.fill();
+          }
+        }
+        cCtx.fillStyle = "rgba(66, 133, 244, 0.18)";
+        fillSignedArea(true);
+        cCtx.fillStyle = "rgba(230, 57, 70, 0.18)";
+        fillSignedArea(false);
 
-  // area fill between curve and t-axis
-  cCtx.beginPath();
-  cCtx.moveTo(ctx_t(vtData[0].t, tMin, tMax), yZero);
-  for (let i = 0; i < vtData.length; i++)
-    cCtx.lineTo(ctx_t(vtData[i].t, tMin, tMax), ctx_v(vtData[i].v, vMin, vMax));
-  cCtx.lineTo(ctx_t(vtData[vtData.length - 1].t, tMin, tMax), yZero);
-  cCtx.closePath();
-  cCtx.fillStyle = 'rgba(66, 133, 244, 0.18)';
-  cCtx.fill();
+        // v‑t curve
+        cCtx.strokeStyle = "#1a56db";
+        cCtx.lineWidth = 2.5;
+        cCtx.lineJoin = "round";
+        cCtx.beginPath();
+        for (let i = 0; i < vtData.length; i++) {
+          const x = ctx_t(vtData[i].t, tMin, tMax),
+            y = ctx_v(vtData[i].v, vMin, vMax);
+          i === 0 ? cCtx.moveTo(x, y) : cCtx.lineTo(x, y);
+        }
+        cCtx.stroke();
 
-  // v‑t curve
-  cCtx.strokeStyle = '#1a56db'; cCtx.lineWidth = 2.5; cCtx.lineJoin = 'round';
-  cCtx.beginPath();
-  for (let i = 0; i < vtData.length; i++) {
-    const x = ctx_t(vtData[i].t, tMin, tMax), y = ctx_v(vtData[i].v, vMin, vMax);
-    i === 0 ? cCtx.moveTo(x, y) : cCtx.lineTo(x, y);
-  }
-  cCtx.stroke();
+        // data dots
+        const dotStep = Math.max(1, Math.floor(vtData.length / 70));
+        cCtx.fillStyle = "#1a56db";
+        for (let i = 0; i < vtData.length; i += dotStep) {
+          cCtx.beginPath();
+          cCtx.arc(
+            ctx_t(vtData[i].t, tMin, tMax),
+            ctx_v(vtData[i].v, vMin, vMax),
+            2.2,
+            0,
+            Math.PI * 2
+          );
+          cCtx.fill();
+        }
 
-  // data dots
-  const dotStep = Math.max(1, Math.floor(vtData.length / 70));
-  cCtx.fillStyle = '#1a56db';
-  for (let i = 0; i < vtData.length; i += dotStep) {
-    cCtx.beginPath(); cCtx.arc(ctx_t(vtData[i].t, tMin, tMax), ctx_v(vtData[i].v, vMin, vMax), 2.2, 0, Math.PI * 2); cCtx.fill();
-  }
+        // current point highlight
+        const last = vtData[vtData.length - 1];
+        const lx = ctx_t(last.t, tMin, tMax),
+          ly = ctx_v(last.v, vMin, vMax);
+        cCtx.fillStyle = "#e63946";
+        cCtx.beginPath();
+        cCtx.arc(lx, ly, 5, 0, Math.PI * 2);
+        cCtx.fill();
+        cCtx.strokeStyle = "#fff";
+        cCtx.lineWidth = 2;
+        cCtx.stroke();
 
-  // current point highlight
-  const last = vtData[vtData.length - 1];
-  const lx = ctx_t(last.t, tMin, tMax), ly = ctx_v(last.v, vMin, vMax);
-  cCtx.fillStyle = '#e63946';
-  cCtx.beginPath(); cCtx.arc(lx, ly, 5, 0, Math.PI * 2); cCtx.fill();
-  cCtx.strokeStyle = '#fff'; cCtx.lineWidth = 2; cCtx.stroke();
+        // slope annotation
+        if (Math.abs(a) > 0.005 && vRange > 0) {
+          const dtSpan = (tMax - tMin) * 0.06;
+          const dtPx = (dtSpan / (tMax - tMin)) * CPW;
+          const dv_Px = (-(a * dtSpan) / vRange) * CPH;
+          const len = Math.sqrt(dtPx * dtPx + dv_Px * dv_Px);
+          if (len > 12) {
+            const sc = 55 / len;
+            const dx = dtPx * sc,
+              dy = dv_Px * sc;
+            cCtx.strokeStyle = "#e63946";
+            cCtx.lineWidth = 2;
+            cCtx.setLineDash([5, 3]);
+            cCtx.beginPath();
+            cCtx.moveTo(lx - dx, ly - dy);
+            cCtx.lineTo(lx + dx, ly + dy);
+            cCtx.stroke();
+            cCtx.setLineDash([]);
+            const labelX = Math.min(lx + dx + 8, CW - 125);
+            const labelY = Math.max(ly + dy - 8, 16);
+            cCtx.fillStyle = "#e63946";
+            cCtx.font =
+              'bold 11px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+            cCtx.textAlign = "left";
+            cCtx.fillText(`k = ${a.toFixed(2)} m/s²`, labelX, labelY);
+          }
+        }
 
-  // slope annotation
-  if (Math.abs(a) > 0.005 && vRange > 0) {
-    const dtSpan = (tMax - tMin) * 0.06;
-    const dtPx = dtSpan / (tMax - tMin) * CPW;
-    const dv_Px = -(a * dtSpan) / vRange * CPH;
-    const len = Math.sqrt(dtPx * dtPx + dv_Px * dv_Px);
-    if (len > 12) {
-      const sc = 55 / len;
-      const dx = dtPx * sc, dy = dv_Px * sc;
-      cCtx.strokeStyle = '#e63946'; cCtx.lineWidth = 2;
-      cCtx.setLineDash([5, 3]);
-      cCtx.beginPath(); cCtx.moveTo(lx - dx, ly - dy); cCtx.lineTo(lx + dx, ly + dy); cCtx.stroke();
-      cCtx.setLineDash([]);
-      const labelX = Math.min(lx + dx + 8, CW - 125);
-      const labelY = Math.max(ly + dy - 8, 16);
-      cCtx.fillStyle = '#e63946';
-      cCtx.font = 'bold 11px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
-      cCtx.textAlign = 'left';
-      cCtx.fillText(`k = ${a.toFixed(2)} m/s²`, labelX, labelY);
-    }
-  }
+        // displacement labels — positive (blue), negative (red), net, stacked vertically
+        const areas = computeSignedAreas();
+        cCtx.textAlign = "left";
+        cCtx.font =
+          'bold 12px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+        const ax = CPAD.left + 8;
+        const by = CPAD.top + CPH - 4;
+        cCtx.fillStyle = "rgba(66, 133, 244, 0.9)";
+        cCtx.fillText(`Forward: +${Math.round(areas.pos)} m`, ax, by - 28);
+        cCtx.fillStyle = "rgba(230, 57, 70, 0.9)";
+        cCtx.fillText(`Backward: ${Math.round(areas.neg)} m`, ax, by - 14);
+        cCtx.fillStyle = "#333";
+        cCtx.fillText(`Net = ${Math.round(areas.net)} m`, ax, by);
+      }
 
-  // displacement label
-  const area = computeArea();
-  cCtx.fillStyle = 'rgba(26, 86, 219, 0.85)';
-  cCtx.font = 'bold 12px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
-  cCtx.textAlign = 'left';
-  cCtx.fillText(`Area = Displacement = ${Math.round(s)} m (Trapezoidal: ${Math.round(area)} m)`, CPAD.left + 8, CPAD.top + CPH - 8);
-}
+      // chart hover tooltip
+      const $tooltip = document.getElementById("chartTooltip");
+      chartCanvas.addEventListener("mousemove", (e) => {
+        if (vtData.length < 2) return;
+        const rect = chartCanvas.getBoundingClientRect();
+        const scaleX = CW / rect.width;
+        const scaleY = CH / rect.height;
+        const mx = (e.clientX - rect.left) * scaleX;
+        const my = (e.clientY - rect.top) * scaleY;
 
-// chart hover tooltip
-const $tooltip = document.getElementById('chartTooltip');
-chartCanvas.addEventListener('mousemove', e => {
-  if (vtData.length < 2) return;
-  const rect = chartCanvas.getBoundingClientRect();
-  const scaleX = CW / rect.width;
-  const scaleY = CH / rect.height;
-  const mx = (e.clientX - rect.left) * scaleX;
-  const my = (e.clientY - rect.top) * scaleY;
+        // find nearest point
+        let tMin2 = 0,
+          tMax2 = 10,
+          vMin2 = -5,
+          vMax2 = 5;
+        if (vtData.length > 0) {
+          tMax2 = Math.max(vtData[vtData.length - 1].t + 1, 8);
+          const allV = vtData.map((d) => d.v);
+          vMax2 = Math.max(2, ...allV) * 1.2;
+          vMin2 = Math.min(-2, ...allV) * 1.2;
+          if (vMin2 > 0) vMin2 = 0;
+          if (vMax2 < 0) vMax2 = 0;
+        }
 
-  // find nearest point
-  let tMin2 = 0, tMax2 = 10, vMin2 = -5, vMax2 = 5;
-  if (vtData.length > 0) {
-    tMax2 = Math.max(vtData[vtData.length - 1].t + 1, 8);
-    const allV = vtData.map(d => d.v);
-    vMax2 = Math.max(2, ...allV) * 1.2;
-    vMin2 = Math.min(-2, ...allV) * 1.2;
-    if (vMin2 > 0) vMin2 = 0;
-    if (vMax2 < 0) vMax2 = 0;
-  }
+        let best = null,
+          bestDist = Infinity;
+        vtData.forEach((d) => {
+          const x = ctx_t(d.t, tMin2, tMax2),
+            y = ctx_v(d.v, vMin2, vMax2);
+          const dist = (mx - x) ** 2 + (my - y) ** 2;
+          if (dist < bestDist) {
+            bestDist = dist;
+            best = d;
+          }
+        });
 
-  let best = null, bestDist = Infinity;
-  vtData.forEach(d => {
-    const x = ctx_t(d.t, tMin2, tMax2), y = ctx_v(d.v, vMin2, vMax2);
-    const dist = (mx - x) ** 2 + (my - y) ** 2;
-    if (dist < bestDist) { bestDist = dist; best = d; }
-  });
+        if (best && bestDist < 300) {
+          $tooltip.style.display = "block";
+          $tooltip.style.left = e.clientX + 18 + "px";
+          $tooltip.style.top = e.clientY - 38 + "px";
+          $tooltip.textContent = `t = ${best.t.toFixed(
+            2
+          )} s  |  v = ${best.v.toFixed(2)} m/s`;
+        } else {
+          $tooltip.style.display = "none";
+        }
+      });
+      chartCanvas.addEventListener("mouseleave", () => {
+        $tooltip.style.display = "none";
+      });
 
-  if (best && bestDist < 300) {
-    $tooltip.style.display = 'block';
-    $tooltip.style.left   = (e.clientX + 18) + 'px';
-    $tooltip.style.top    = (e.clientY - 38) + 'px';
-    $tooltip.textContent  = `t = ${best.t.toFixed(2)} s  |  v = ${best.v.toFixed(2)} m/s`;
-  } else {
-    $tooltip.style.display = 'none';
-  }
-});
-chartCanvas.addEventListener('mouseleave', () => { $tooltip.style.display = 'none'; });
+      // ──────────────────────────────────────────────
+      //  8. GAME LOOP
+      // ──────────────────────────────────────────────
+      function gameLoop(now) {
+        if (!running) return;
+        if (!lastTime) lastTime = now;
 
-// ──────────────────────────────────────────────
-//  8. GAME LOOP
-// ──────────────────────────────────────────────
-function gameLoop(now) {
-  if (!running) return;
-  if (!lastTime) lastTime = now;
+        if (!paused) {
+          let dt = (now - lastTime) / 1000;
+          if (dt <= 0) dt = 0.016;
+          if (dt > 0.1) dt = 0.1;
+          lastTime = now;
 
-  if (!paused) {
-    let dt = (now - lastTime) / 1000;
-    if (dt <= 0) dt = 0.016;
-    if (dt > 0.1) dt = 0.1;
-    lastTime = now;
+          updatePhysics(dt);
 
-    updatePhysics(dt);
+          // sample v‑t data & redraw chart @ ~10 Hz
+          if (now - lastSample > 90) {
+            vtData.push({ t, v });
+            lastSample = now;
+            drawChart();
+          }
+        }
 
-    // sample v‑t data & redraw chart @ ~10 Hz
-    if (now - lastSample > 90) {
-      vtData.push({ t, v });
-      lastSample = now;
+        renderGame();
+        requestAnimationFrame(gameLoop);
+      }
+
+      // ──────────────────────────────────────────────
+      //  9. PAUSE / RESUME
+      // ──────────────────────────────────────────────
+      function togglePause() {
+        if (!running) return;
+        paused = !paused;
+        if (paused) {
+          $pauseBtn.textContent = "▶ Resume";
+          $status.textContent = "Paused";
+          lastTime = 0;
+        } else {
+          $pauseBtn.textContent = "⏸ Pause";
+          $status.textContent = "";
+        }
+      }
+
+      // ──────────────────────────────────────────────
+      // 10. STOP
+      // ──────────────────────────────────────────────
+      function stopGame() {
+        running = false;
+        paused = false;
+        $config.style.display = "flex";
+        $wrapper.style.display = "none";
+        $chart.style.display = "none";
+        $bottom.style.display = "none";
+        $pauseBtn.textContent = "⏸ Pause";
+        $status.textContent = "";
+      }
+
+      // ──────────────────────────────────────────────
+      // 11. START
+      // ──────────────────────────────────────────────
+      function startGame() {
+        cfgAccel = parseFloat($accelIn.value) || 2;
+        cfgBrake = parseFloat($brakeIn.value) || 3;
+        if (cfgAccel <= 0) cfgAccel = 2;
+        if (cfgBrake <= 0) cfgBrake = 3;
+
+        $config.style.display = "none";
+        $wrapper.style.display = "block";
+        $chart.style.display = "block";
+        $bottom.style.display = "flex";
+
+        running = true;
+        paused = false;
+        t = 0;
+        v = 0;
+        s = 0;
+        a = 0;
+        bgOffset = 0;
+        vtData = [{ t: 0, v: 0 }];
+        lastTime = 0;
+        lastSample = 0;
+        for (const k in keys) keys[k] = false;
+        $pauseBtn.textContent = "⏸ Pause";
+        $status.textContent = "";
+
+        renderGame();
+        drawChart();
+        requestAnimationFrame(gameLoop);
+      }
+
+      // ──────────────────────────────────────────────
+      // 12. INPUT
+      // ──────────────────────────────────────────────
+      window.addEventListener("keydown", (e) => {
+        const k = e.key.toLowerCase();
+        if (k === "j" || k === "k") {
+          e.preventDefault();
+          keys[k] = true;
+        }
+      });
+      window.addEventListener("keyup", (e) => {
+        const k = e.key.toLowerCase();
+        if (k === "j" || k === "k") {
+          e.preventDefault();
+          keys[k] = false;
+        }
+      });
+
+      // ──────────────────────────────────────────────
+      // 13. BUTTONS
+      // ──────────────────────────────────────────────
+      $pauseBtn.addEventListener("click", togglePause);
+      $stopBtn.addEventListener("click", stopGame);
+      document.getElementById("startBtn").addEventListener("click", startGame);
+
+      // draw initial still frames
+      renderGame();
       drawChart();
-    }
-  }
-
-  renderGame();
-  requestAnimationFrame(gameLoop);
-}
-
-// ──────────────────────────────────────────────
-//  9. PAUSE / RESUME
-// ──────────────────────────────────────────────
-function togglePause() {
-  if (!running) return;
-  paused = !paused;
-  if (paused) {
-    $pauseBtn.textContent = '▶ Resume';
-    $status.textContent = 'Paused';
-    lastTime = 0;
-  } else {
-    $pauseBtn.textContent = '⏸ Pause';
-    $status.textContent = '';
-  }
-}
-
-// ──────────────────────────────────────────────
-// 10. STOP
-// ──────────────────────────────────────────────
-function stopGame() {
-  running = false;
-  paused  = false;
-  $config.style.display  = 'flex';
-  $wrapper.style.display = 'none';
-  $chart.style.display   = 'none';
-  $bottom.style.display  = 'none';
-  $pauseBtn.textContent  = '⏸ Pause';
-  $status.textContent    = '';
-}
-
-// ──────────────────────────────────────────────
-// 11. START
-// ──────────────────────────────────────────────
-function startGame() {
-  cfgAccel = parseFloat($accelIn.value) || 2;
-  cfgBrake = parseFloat($brakeIn.value) || 3;
-  if (cfgAccel <= 0) cfgAccel = 2;
-  if (cfgBrake <= 0) cfgBrake = 3;
-
-  $config.style.display  = 'none';
-  $wrapper.style.display = 'block';
-  $chart.style.display   = 'block';
-  $bottom.style.display  = 'flex';
-
-  running    = true;
-  paused     = false;
-  t = 0; v = 0; s = 0; a = 0; bgOffset = 0;
-  vtData     = [{ t: 0, v: 0 }];
-  lastTime   = 0;
-  lastSample = 0;
-  for (const k in keys) keys[k] = false;
-  $pauseBtn.textContent = '⏸ Pause';
-  $status.textContent   = '';
-
-  renderGame();
-  drawChart();
-  requestAnimationFrame(gameLoop);
-}
-
-// ──────────────────────────────────────────────
-// 12. INPUT
-// ──────────────────────────────────────────────
-window.addEventListener('keydown', e => {
-  const k = e.key.toLowerCase();
-  if (k === 'j' || k === 'k') { e.preventDefault(); keys[k] = true; }
-});
-window.addEventListener('keyup', e => {
-  const k = e.key.toLowerCase();
-  if (k === 'j' || k === 'k') { e.preventDefault(); keys[k] = false; }
-});
-
-// ──────────────────────────────────────────────
-// 13. BUTTONS
-// ──────────────────────────────────────────────
-$pauseBtn.addEventListener('click', togglePause);
-$stopBtn.addEventListener('click', stopGame);
-document.getElementById('startBtn').addEventListener('click', startGame);
-
-// draw initial still frames
-renderGame();
-drawChart();
-</script>
-</body>
+    </script>
+  </body>
 </html>
