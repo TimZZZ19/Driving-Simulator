@@ -316,6 +316,7 @@
       let cfgBrake = 3;
       let running = false;
       let paused = false;
+      let simStarted = false;
 
       // physics
       let t = 0,
@@ -636,6 +637,7 @@
       //  6. PHYSICS
       // ──────────────────────────────────────────────
       function updatePhysics(dt) {
+        if (!simStarted) return;
         if (keys["k"]) a = cfgAccel;
         else if (keys["j"]) a = -cfgBrake;
         else a = 0;
@@ -1008,7 +1010,7 @@
           updatePhysics(dt);
 
           // sample v‑t data & redraw chart @ ~10 Hz
-          if (now - lastSample > 90) {
+          if (simStarted && now - lastSample > 90) {
             vtData.push({ t, v });
             lastSample = now;
             drawChart();
@@ -1041,6 +1043,7 @@
       function stopGame() {
         running = false;
         paused = false;
+        simStarted = false;
         $config.style.display = "flex";
         $wrapper.style.display = "none";
         $chart.style.display = "none";
@@ -1065,6 +1068,7 @@
 
         running = true;
         paused = false;
+        simStarted = false;
         t = 0;
         v = 0;
         s = 0;
@@ -1090,6 +1094,7 @@
         if (k === "j" || k === "k") {
           e.preventDefault();
           keys[k] = true;
+          if (k === "k") simStarted = true;
         }
       });
       window.addEventListener("keyup", (e) => {

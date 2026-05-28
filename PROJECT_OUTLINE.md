@@ -68,11 +68,12 @@ Driving-Simulator/
      │
      ├── 4. Physics Engine (L381-390)
      │    ├── updatePhysics(dt)
+     │    │    ├── if !simStarted → return (frozen until first K press)
      │    │    ├── a = +cfgAccel  (K pressed)
      │    │    ├── a = -cfgBrake  (J pressed)
      │    │    ├── a = 0          (neither)
      │    │    ├── v += a * dt
-     │    │    ├── s += v * dt
+     │    │    ├── s += (v0+v)/2 * dt  (trapezoidal)
      │    │    ├── t += dt
      │    │    └── bgOffset += v * PX_PER_M * dt
      │    │
@@ -83,19 +84,21 @@ Driving-Simulator/
      │
      ├── 5. Input System (L676-683)
      │    ├── keydown → keys['j'|'k'] = true
+     │    ├── first K press → simStarted = true (unfreezes physics)
      │    └── keyup   → keys['j'|'k'] = false
      │
      ├── 6. Game Loop (L590-612)
      │    ├── gameLoop(now)
      │    │    ├── dt clamping (0.016 ~ 0.1 s)
      │    │    ├── updatePhysics(dt)       [when not paused]
-     │    │    ├── vtData sampling @ ~10 Hz [when not paused]
+     │    │    ├── vtData sampling @ ~10 Hz [when simStarted & not paused]
      │    │    ├── renderGame()
      │    │    └── requestAnimationFrame(gameLoop)
      │    │
      │    └── State Management
      │         ├── running: boolean
      │         ├── paused:  boolean
+     │         ├── simStarted: boolean   (starts on first K press, gates physics)
      │         ├── t, v, s, a:  number  (physics state)
      │         ├── lastTime, lastSample:  number
      │         └── vtData:  {t, v}[]     (chart data buffer)
