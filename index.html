@@ -331,7 +331,7 @@ function drawHUD() {
     { lbl: 'Speed v',       val: v.toFixed(1),  unit: 'm/s',   clr: v < 0 ? '#ef5350' : '#4fc3f7' },
     { lbl: 'Time t',        val: t.toFixed(1),  unit: 's',     clr: '#fff' },
     { lbl: 'Displacement s',val: Math.round(s),  unit: 'm',     clr: s < 0 ? '#ef5350' : '#81c784' },
-    { lbl: 'Acceleration a',val: a.toFixed(2),  unit: 'm/s²',  clr: a >= 0 ? '#ffb74d' : '#ef5350' },
+    { lbl: 'Acceleration a',val: a.toFixed(1),  unit: 'm/s²',  clr: a >= 0 ? '#ffb74d' : '#ef5350' },
   ];
   ctx.textBaseline = 'middle';
   rows.forEach((r, i) => {

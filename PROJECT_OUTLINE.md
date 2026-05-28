@@ -40,7 +40,7 @@ Driving-Simulator/
      │         │    ├── speed v (m/s, blue/red for reverse)
      │         │    ├── time t (s, white)
      │         │    ├── displacement s (m, green/red, rounded integer)
-     │         │    └── acceleration a (m/s², orange/red)
+     │         │    └── acceleration a (m/s², orange/red, rounded to 1 decimal)
      │         │
      │         └── 2f. Pedal Indicator (L348-363)
      │              ├── J brake pedal (red when pressed)
@@ -166,3 +166,67 @@ Driving-Simulator/
 | **V-T Chart**  | `vtData[]`, `a`, `s`                | —                                     |
 | **HUD**        | `v`, `t`, `s`, `a`                  | —                                     |
 | **Input**      | keyboard events                     | `keys[]`                              |
+
+## Data Flow
+
+```
+                    ┌─────────────┐
+                    │  Keyboard   │
+                    │  (J / K)    │
+                    └──────┬──────┘
+                           │ keydown / keyup
+                           ▼
+                    ┌─────────────┐
+                    │    keys[]   │
+                    │  {j, k}     │
+                    └──────┬──────┘
+                           │ read by Physics
+                           ▼
+              ┌────────────────────────┐
+              │    updatePhysics(dt)    │
+              │                        │
+              │  a = +cfgAccel (K)     │
+              │  a = -cfgBrake (J)     │
+              │  a = 0        (none)   │
+              │                        │
+              │  v += a * dt           │
+              │  s += (v0+v)/2 * dt    │
+              │  t += dt               │
+              │  bgOffset += v*PPM*dt  │
+              └────────┬───────────────┘
+                       │
+         ┌─────────────┼──────────────┐
+         ▼             ▼              ▼
+   ┌──────────┐  ┌──────────┐  ┌──────────┐
+   │ v,s,t,a  │  │ vtData[] │  │bgOffset  │
+   │ (physics │  │ (chart   │  │(scenery  │
+   │  state)  │  │  buffer) │  │  scroll) │
+   └────┬─────┘  └────┬─────┘  └────┬─────┘
+        │             │             │
+        ▼             ▼             ▼
+   ┌──────────┐  ┌──────────┐  ┌──────────┐
+   │   HUD    │  │ V-T Chart│  │ Scenery  │
+   │ speed    │  │ curve    │  │mountains │
+   │ time     │  │ area     │  │ trees    │
+   │ displ.   │  │ slope    │  │ buildings│
+   │ accel.   │  │ tooltip  │  │ road     │
+   └──────────┘  └──────────┘  └──────────┘
+                       
+   ┌──────────────────────────────────────┐
+   │             renderGame()             │
+   │  Sky → Scenery → Road → Car → HUD   │
+   │              → Pedals                │
+   └──────────────────────────────────────┘
+```
+
+### Sampling Strategy
+
+```
+requestAnimationFrame (~60 Hz)
+        │
+        ├──► updatePhysics(dt)     [every frame, when not paused]
+        │
+        └──► vtData sampling       [throttled to ~10 Hz, L603]
+             │
+             └──► drawChart()      [only when new sample added]
+```
