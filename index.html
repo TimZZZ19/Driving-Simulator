@@ -623,11 +623,40 @@
       // ──────────────────────────────────────────────
       //  5. GAME RENDER FRAME
       // ──────────────────────────────────────────────
+      function drawStartPole() {
+        const px = CAR_X - s * PX_PER_M;   // world origin mapped to screen
+        if (px < -10 || px > W + 10) return;
+        const bottom = ROAD_Y;
+        const top = ROAD_Y - 80;
+        // pole
+        ctx.fillStyle = "#4a3728";
+        ctx.fillRect(px - 3, top, 6, bottom - top);
+        // base
+        ctx.fillStyle = "#666";
+        ctx.fillRect(px - 9, bottom - 6, 18, 8);
+        // flag sign
+        ctx.fillStyle = "#e63946";
+        const fy = top, fw = 36, fh = 22;
+        ctx.beginPath();
+        ctx.moveTo(px + 3, fy);
+        ctx.lineTo(px + 3 + fw, fy + fh / 2);
+        ctx.lineTo(px + 3, fy + fh);
+        ctx.closePath();
+        ctx.fill();
+        // "0" label on flag
+        ctx.fillStyle = "#fff";
+        ctx.font = 'bold 11px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("0", px + 5 + fw / 2, fy + fh / 2);
+      }
+
       function renderGame() {
         ctx.clearRect(0, 0, W, H);
         drawSky();
         drawScenery(bgOffset);
         drawRoad(bgOffset);
+        drawStartPole();
         drawCar(s);
         drawHUD();
         drawPedals();
