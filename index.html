@@ -936,11 +936,11 @@
         const ax = CPAD.left + 8;
         const by = CPAD.top + CPH - 4;
         cCtx.fillStyle = "rgba(66, 133, 244, 0.9)";
-        cCtx.fillText(`Forward: +${Math.round(areas.pos)} m`, ax, by - 28);
+        cCtx.fillText(`Forward:    +${Math.round(areas.pos)} m`, ax, by - 28);
         cCtx.fillStyle = "rgba(230, 57, 70, 0.9)";
-        cCtx.fillText(`Backward: ${Math.round(areas.neg)} m`, ax, by - 14);
+        cCtx.fillText(`Backward:   ${Math.round(areas.neg)} m`, ax, by - 14);
         cCtx.fillStyle = "#333";
-        cCtx.fillText(`Net = ${Math.round(areas.net)} m`, ax, by);
+        cCtx.fillText(`Net Area:   ${Math.round(areas.net)} m`, ax, by);
       }
 
       // chart hover tooltip
