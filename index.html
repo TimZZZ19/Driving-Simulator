@@ -1124,6 +1124,9 @@
           e.preventDefault();
           keys[k] = true;
           if (k === "k") simStarted = true;
+        } else if (k === " ") {
+          e.preventDefault();
+          togglePause();
         }
       });
       window.addEventListener("keyup", (e) => {
