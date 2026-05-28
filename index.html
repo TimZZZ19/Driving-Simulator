@@ -330,7 +330,7 @@ function drawHUD() {
   const rows = [
     { lbl: 'Speed v',       val: v.toFixed(1),  unit: 'm/s',   clr: v < 0 ? '#ef5350' : '#4fc3f7' },
     { lbl: 'Time t',        val: t.toFixed(1),  unit: 's',     clr: '#fff' },
-    { lbl: 'Displacement s',val: s.toFixed(1),  unit: 'm',     clr: s < 0 ? '#ef5350' : '#81c784' },
+    { lbl: 'Displacement s',val: Math.round(s),  unit: 'm',     clr: s < 0 ? '#ef5350' : '#81c784' },
     { lbl: 'Acceleration a',val: a.toFixed(2),  unit: 'm/s²',  clr: a >= 0 ? '#ffb74d' : '#ef5350' },
   ];
   ctx.textBaseline = 'middle';
@@ -383,8 +383,9 @@ function updatePhysics(dt) {
   else if (keys['j']) a = -cfgBrake;
   else                a =  0;
 
+  const v0 = v;
   v += a * dt;
-  s += v * dt;
+  s += (v0 + v) / 2 * dt;
   t += dt;
   bgOffset += v * PX_PER_M * dt;
 }
@@ -542,7 +543,7 @@ function drawChart() {
   cCtx.fillStyle = 'rgba(26, 86, 219, 0.85)';
   cCtx.font = 'bold 12px "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif';
   cCtx.textAlign = 'left';
-  cCtx.fillText(`Area = Displacement = ${s.toFixed(1)} m (Trapezoidal: ${area.toFixed(1)} m)`, CPAD.left + 8, CPAD.top + CPH - 8);
+  cCtx.fillText(`Area = Displacement = ${Math.round(s)} m (Trapezoidal: ${Math.round(area)} m)`, CPAD.left + 8, CPAD.top + CPH - 8);
 }
 
 // chart hover tooltip
